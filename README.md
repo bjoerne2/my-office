@@ -30,25 +30,20 @@ Die Python-Abhängigkeiten werden projektlokal in `/.venv` installiert.
 ```bash
 cd /Users/bjoerne/Source/my-office
 python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+./.venv/bin/python -m pip install --upgrade pip
+./.venv/bin/python -m pip install -r requirements.txt
 ```
 
-Hinweis: In jeder neuen Shell-Session vor der Arbeit im Projekt aktivieren:
-
-```bash
-cd /Users/bjoerne/Source/my-office
-source .venv/bin/activate
-```
+Danach ist keine manuelle Aktivierung pro Shell-Session nötig.
+`./monkkee/process_paypal_report` verwendet automatisch `/.venv`, wenn vorhanden.
 
 ## Abhängigkeiten aktualisieren
 
 Wenn neue Pakete hinzukommen:
 
 ```bash
-python -m pip install <paketname>
-python -m pip freeze > requirements.txt
+./.venv/bin/python -m pip install <paketname>
+./.venv/bin/python -m pip freeze > requirements.txt
 ```
 
 ## Verwendung

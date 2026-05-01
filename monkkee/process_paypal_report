@@ -2,10 +2,26 @@
 
 import sys
 import os
-import pandas as pd
+
+
+def ensure_project_venv():
+    """Nutze automatisch die Projekt-venv, wenn sie vorhanden ist."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(script_dir)
+    venv_python = os.path.join(repo_root, ".venv", "bin", "python")
+
+    if not os.path.isfile(venv_python):
+        return
+
+    if os.path.realpath(sys.executable) == os.path.realpath(venv_python):
+        return
+
+    os.execv(venv_python, [venv_python, *sys.argv])
 
 
 def main():
+    ensure_project_venv()
+
     if len(sys.argv) != 2:
         print("Usage: process_paypal_report <report csv file>")
         sys.exit(1)
@@ -22,6 +38,15 @@ def main():
 
     filename = os.path.basename(input_file)
     output_file = os.path.splitext(filename)[0] + "_processed.xlsx"
+
+    try:
+        import pandas as pd
+    except ModuleNotFoundError:
+        print("Fehlende Abhängigkeit: pandas")
+        print("Bitte im Projektverzeichnis ausführen:")
+        print("  python3 -m venv .venv")
+        print("  ./.venv/bin/python -m pip install -r requirements.txt")
+        sys.exit(1)
 
     # CSV laden (PayPal nutzt oft ; als Separator in DE)
     try:
