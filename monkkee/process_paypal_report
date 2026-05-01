@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import pandas as pd
+
+
+def main():
+    if len(sys.argv) != 2:
+        print("Usage: process_paypal_report <report csv file>")
+        sys.exit(1)
+
+    input_file = sys.argv[1]
+
+    if not os.path.isfile(input_file):
+        print(f"File not found: {input_file}")
+        sys.exit(1)
+
+    # Arbeitsverzeichnis = Verzeichnis der Eingabedatei
+    workdir = os.path.dirname(os.path.abspath(input_file))
+    os.chdir(workdir)
+
+    filename = os.path.basename(input_file)
+    output_file = os.path.splitext(filename)[0] + "_processed.xlsx"
+
+    # CSV laden (PayPal nutzt oft ; als Separator in DE)
+    try:
+        df = pd.read_csv(input_file, sep=",", encoding="utf-8")
+    except:
+        df = pd.read_csv(input_file, sep=";", encoding="utf-8")
+
+    # Zeilen entfernen mit "Allgemeine Abbuchung"
+    df = df[~df.apply(lambda row: row.astype(str).str.contains("Allgemeine Abbuchung").any(), axis=1)]
+
+    # Spalten entfernen (nur wenn vorhanden → robust)
+    columns_to_remove = [
+        "Zeitzone",
+        "Name",
+        "Typ",
+        "Status",
+        "Währung",
+        "Absender E-Mail-Adresse",
+        "Empfänger E-Mail-Adresse",
+        "Zugehöriger Transaktionscode",
+        "Rechnungsnummer",
+        "Empfangsnummer"
+    ]
+
+    df = df.drop(columns=[col for col in columns_to_remove if col in df.columns])
+
+    # Excel speichern
+    df.to_excel(output_file, index=False)
+
+    print(f"✔ Erfolgreich erstellt: {output_file}")
+
+
+if __name__ == "__main__":
+    main()
