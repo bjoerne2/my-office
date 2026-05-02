@@ -5,7 +5,7 @@ import os
 
 
 def ensure_project_venv():
-    """Nutze automatisch die Projekt-venv, wenn sie vorhanden ist."""
+    """Automatically use the project venv when available."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(script_dir)
     venv_python = os.path.join(repo_root, ".venv", "bin", "python")
@@ -13,7 +13,9 @@ def ensure_project_venv():
     if not os.path.isfile(venv_python):
         return
 
-    if os.path.realpath(sys.executable) == os.path.realpath(venv_python):
+    # Do not compare via realpath: venv Python is often a symlink
+    # to the same base interpreter as system Python.
+    if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
         return
 
     os.execv(venv_python, [venv_python, *sys.argv])
@@ -32,7 +34,7 @@ def main():
         print(f"File not found: {input_file}")
         sys.exit(1)
 
-    # Arbeitsverzeichnis = Verzeichnis der Eingabedatei
+    # Working directory = directory of the input file
     workdir = os.path.dirname(os.path.abspath(input_file))
     os.chdir(workdir)
 
@@ -48,16 +50,16 @@ def main():
         print("  ./.venv/bin/python -m pip install -r requirements.txt")
         sys.exit(1)
 
-    # CSV laden (PayPal nutzt oft ; als Separator in DE)
+    # Load CSV (PayPal often uses ; as separator in DE)
     try:
         df = pd.read_csv(input_file, sep=",", encoding="utf-8")
     except:
         df = pd.read_csv(input_file, sep=";", encoding="utf-8")
 
-    # Zeilen entfernen mit "Allgemeine Abbuchung"
+    # Remove rows containing "Allgemeine Abbuchung"
     df = df[~df.apply(lambda row: row.astype(str).str.contains("Allgemeine Abbuchung").any(), axis=1)]
 
-    # Spalten entfernen (nur wenn vorhanden → robust)
+    # Remove columns (only when present for robustness)
     columns_to_remove = [
         "Zeitzone",
         "Name",
@@ -73,7 +75,7 @@ def main():
 
     df = df.drop(columns=[col for col in columns_to_remove if col in df.columns])
 
-    # Excel speichern
+    # Save Excel output
     df.to_excel(output_file, index=False)
 
     print(f"✔ Erfolgreich erstellt: {output_file}")
