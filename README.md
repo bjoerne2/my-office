@@ -79,20 +79,20 @@ Google Drive als Remote einrichten:
 rclone config
 ```
 
-Danach z.B. `gdrive` als Remote anlegen und den Download-Sync von Google Drive nach lokal starten:
+Dabei z.B. `gdrive` als Remote anlegen und den Zielordner direkt über `root_folder_id` fest verdrahten.
+Danach startet der Download-Sync von diesem Remote-Root nach lokal so:
 
 ```bash
 cd /Users/bjoerne/Source/my-office
-./rclone/sync_app_scripts_data gdrive:app_scripts_data
+./rclone/sync_app_scripts_data
 ```
 
-Alternativ per Umgebungsvariable:
+Falls dein Remote anders heißt:
 
 ```bash
 cd /Users/bjoerne/Source/my-office
-RCLONE_REMOTE_PATH="gdrive:app_scripts_data" ./rclone/sync_app_scripts_data
+RCLONE_REMOTE_NAME="meinremote" ./rclone/sync_app_scripts_data
 ```
 
 Hinweis: Das Skript verwendet `rclone sync` von **remote nach lokal**. Lokale Dateien, die remote nicht existieren, werden dabei entfernt.
-Falls `gdrive:app_scripts_data` noch nicht existiert, kannst du den Ordner vorher mit `rclone mkdir gdrive:app_scripts_data` anlegen.
 

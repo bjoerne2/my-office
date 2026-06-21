@@ -6,15 +6,16 @@ usage() {
 Synchronisiert tmp/app_scripts_data unidirektional von einem Google-Drive-Ordner nach lokal via rclone sync.
 
 Verwendung:
-  sync_app_scripts_data [<remote:path>] [weitere-rclone-optionen]
+  sync_app_scripts_data [weitere-rclone-optionen]
 
 Beispiele:
-  ./rclone/sync_app_scripts_data gdrive:app_scripts_data
-  RCLONE_REMOTE_PATH="gdrive:app_scripts_data" ./rclone/sync_app_scripts_data
-  RCLONE_REMOTE_PATH="gdrive:app_scripts_data" ./rclone/sync_app_scripts_data --dry-run
+  ./rclone/sync_app_scripts_data
+  RCLONE_REMOTE_NAME="gdrive" ./rclone/sync_app_scripts_data
+  ./rclone/sync_app_scripts_data --dry-run
 
 Hinweise:
-- Wenn kein <remote:path> uebergeben wird, wird RCLONE_REMOTE_PATH verwendet.
+- Verwendet den Root des konfigurierten rclone-Remotes (z.B. per root_folder_id festgelegt).
+- Standard-Remote ist "gdrive"; bei anderem Namen RCLONE_REMOTE_NAME setzen.
 - Lokale Dateien, die remote nicht existieren, werden durch "rclone sync" geloescht.
 - Weitere Optionen werden direkt an "rclone sync" durchgereicht.
 EOF
@@ -24,8 +25,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOCAL_DIR="$REPO_ROOT/tmp/app_scripts_data"
 LOG_DIR="$SCRIPT_DIR/logs"
+DEFAULT_REMOTE_NAME="gdrive"
 
-remote_path="${RCLONE_REMOTE_PATH:-}"
+remote_name="${RCLONE_REMOTE_NAME:-$DEFAULT_REMOTE_NAME}"
+remote_path="${remote_name}:"
 extra_args=()
 
 while (($# > 0)); do
@@ -44,12 +47,10 @@ while (($# > 0)); do
       shift
       ;;
     *)
-      if [[ -z "$remote_path" ]]; then
-        remote_path="$1"
-      else
-        extra_args+=("$1")
-      fi
-      shift
+      echo "Fehler: Unerwartetes Positionsargument: $1" >&2
+      echo >&2
+      usage >&2
+      exit 1
       ;;
   esac
 done
@@ -60,8 +61,8 @@ if ! command -v rclone >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ -z "$remote_path" ]]; then
-  echo "Fehler: Bitte einen rclone-Remote-Pfad angeben, z.B. gdrive:app_scripts_data" >&2
+if [[ -z "$remote_name" ]]; then
+  echo "Fehler: Der rclone-Remote-Name ist leer." >&2
   echo >&2
   usage >&2
   exit 1
