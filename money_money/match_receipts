@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import csv
+import os
+import re
+import shutil
+import sys
+from dataclasses import dataclass
+from datetime import datetime, date
+from pathlib import Path
+
+
+DATE_PATTERN = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+
+
+@dataclass(frozen=True)
+class VendorRule:
+    slug: str
+    directory_name: str
+    pdf_prefix: str
+
+
+VENDOR_RULES: dict[str, VendorRule] = {
+    "github": VendorRule(
+        slug="github",
+        directory_name="GitHub",
+        pdf_prefix="github-",
+    ),
+}
+
+
+@dataclass(frozen=True)
+class PdfCandidate:
+    path: Path
+    receipt_date: date
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if Path(sys.executable).resolve() == venv_python.resolve():
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+def usage() -> str:
+    return "Usage: match_receipts <year> <month> <rechnungssteller>"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
+    if len(argv) != 3:
+        raise ValueError(usage())
+
+    try:
+        year = int(argv[0])
+        month = int(argv[1])
+    except ValueError as exc:
+        raise ValueError("Jahr und Monat müssen numerisch sein, z.B. 2026 01") from exc
+
+    if year < 1900 or year > 9999:
+        raise ValueError(f"Ungültiges Jahr: {year}")
+
+    if month < 1 or month > 12:
+        raise ValueError(f"Ungültiger Monat: {month}")
+
+    vendor_slug = argv[2].strip().lower()
+    if vendor_slug not in VENDOR_RULES:
+        supported = ", ".join(sorted(VENDOR_RULES))
+        raise ValueError(f"Unbekannter Rechnungssteller: {argv[2]}. Unterstützt: {supported}")
+
+    return year, month, VENDOR_RULES[vendor_slug]
+
+
+def transactions_csv_path(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
+    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name / "transactions.csv"
+
+
+def staging_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
+    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name
+
+
+def app_data_dir(repo_root: Path) -> Path:
+    return repo_root / "tmp" / "app_scripts_data"
+
+
+def parse_ddmmyyyy(value: str) -> date:
+    return datetime.strptime(value.strip(), "%d.%m.%Y").date()
+
+
+def parse_pdf_date(filename: str) -> date | None:
+    match = DATE_PATTERN.search(filename)
+    if not match:
+        return None
+
+    year, month, day = (int(part) for part in match.groups())
+    return date(year, month, day)
+
+
+def read_transaction_dates(csv_path: Path) -> list[date]:
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle, delimiter=";")
+
+        try:
+            header = next(reader)
+        except StopIteration as exc:
+            raise RuntimeError(f"Leere CSV-Datei: {csv_path}") from exc
+
+        try:
+            booking_date_index = header.index("Buchungstag")
+        except ValueError:
+            booking_date_index = 0
+
+        dates: list[date] = []
+        for row in reader:
+            if not row or not any(cell.strip() for cell in row):
+                continue
+            if booking_date_index >= len(row):
+                raise RuntimeError(f"CSV-Zeile ohne Buchungstag: {row}")
+            dates.append(parse_ddmmyyyy(row[booking_date_index]))
+
+    if not dates:
+        raise RuntimeError(f"Keine Transaktionen in {csv_path} gefunden")
+
+    return dates
+
+
+def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        if not path.name.lower().startswith(vendor.pdf_prefix.lower()):
+            continue
+
+        receipt_date = parse_pdf_date(path.name)
+        if receipt_date is None:
+            continue
+
+        candidates.append(PdfCandidate(path=path, receipt_date=receipt_date))
+
+    if not candidates:
+        raise RuntimeError(f"Keine PDF-Kandidaten für {vendor.directory_name} in {pdf_dir} gefunden")
+
+    return candidates
+
+
+def choose_best_candidate(transaction_date: date, candidates: list[PdfCandidate]) -> PdfCandidate:
+    monthly_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.receipt_date.year == transaction_date.year and candidate.receipt_date.month == transaction_date.month
+    ]
+
+    if not monthly_candidates:
+        raise RuntimeError(
+            f"Kein PDF für {transaction_date.strftime('%Y-%m')} gefunden"
+        )
+
+    return min(
+        monthly_candidates,
+        key=lambda candidate: abs((candidate.receipt_date - transaction_date).days),
+    )
+
+
+def copy_unique_pdfs(target_dir: Path, pdfs: list[Path]) -> list[Path]:
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    copied_paths: list[Path] = []
+    for source_path in sorted(set(pdfs)):
+        destination_path = target_dir / source_path.name
+        shutil.copy2(source_path, destination_path)
+        copied_paths.append(destination_path)
+
+    return copied_paths
+
+
+def main() -> None:
+    ensure_project_venv()
+
+    try:
+        year, month, vendor = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent.parent
+    csv_path = transactions_csv_path(repo_root, year, month, vendor)
+    pdf_dir = app_data_dir(repo_root)
+    target_dir = staging_dir(repo_root, year, month, vendor)
+
+    if not csv_path.is_file():
+        print(f"Transaktionsdatei nicht gefunden: {csv_path}")
+        sys.exit(1)
+
+    if not pdf_dir.is_dir():
+        print(f"PDF-Quellordner nicht gefunden: {pdf_dir}")
+        sys.exit(1)
+
+    try:
+        transaction_dates = read_transaction_dates(csv_path)
+        candidates = collect_candidates(pdf_dir, vendor)
+        matched_pdfs = [choose_best_candidate(transaction_date, candidates).path for transaction_date in transaction_dates]
+        copied_paths = copy_unique_pdfs(target_dir, matched_pdfs)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    for path in copied_paths:
+        print(path)
+
+
+if __name__ == "__main__":
+    main()
+
