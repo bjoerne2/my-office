@@ -28,7 +28,7 @@ VENDOR_RULES: dict[str, VendorRule] = {
 def ensure_project_venv() -> None:
 	"""Automatically use the project venv when available."""
 	script_path = Path(__file__).resolve()
-	repo_root = script_path.parent.parent
+	repo_root = script_path.parent
 	venv_python = repo_root / ".venv" / "bin" / "python"
 
 	if not venv_python.is_file():
@@ -69,7 +69,7 @@ def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
 
 
 def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
-	return repo_root / "tmp" / "accounting" / f"{year:04d}" / f"{month:02d}" / "transactions.csv"
+	return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / "transactions.csv"
 
 
 def destination_csv_path(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
@@ -113,7 +113,7 @@ def main() -> None:
 		print(exc)
 		sys.exit(1)
 
-	repo_root = Path(__file__).resolve().parent.parent
+	repo_root = Path(__file__).resolve().parent
 	input_path = source_csv_path(repo_root, year, month)
 	output_path = destination_csv_path(repo_root, year, month, vendor)
 
@@ -137,4 +137,5 @@ def main() -> None:
 
 if __name__ == "__main__":
 	main()
+
 

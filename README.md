@@ -4,11 +4,11 @@ Dieses Repository enthält kleine Office-Automatisierungen.
 
 Aktuell enthalten:
 
-- `monkkee/process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
-- `money_money/export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/accounting/<jahr>/<monat>/transactions.csv`.
-- `money_money/extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
-- `money_money/match_receipts`: Findet passende PDFs in `tmp/app_scripts_data` und kopiert sie direkt in den Staging-Monatsordner.
-- `rclone/sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
+- `process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
+- `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/staging/<jahr>/<monat>/transactions.csv`.
+- `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
+- `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data` und kopiert sie direkt in den Staging-Monatsordner.
+- `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
 
@@ -39,7 +39,7 @@ python3 -m venv .venv
 ```
 
 Danach ist keine manuelle Aktivierung pro Shell-Session nötig.
-`./monkkee/process_paypal_report` verwendet automatisch `/.venv`, wenn vorhanden.
+`./process_paypal_report` sowie die Python-Skripte im Repository verwenden automatisch `/.venv`, wenn vorhanden.
 
 ## Abhängigkeiten aktualisieren
 
@@ -53,7 +53,7 @@ Wenn neue Pakete hinzukommen:
 ## Verwendung
 
 ```bash
-./monkkee/process_paypal_report <report.csv>
+./process_paypal_report <report.csv>
 ```
 
 Die Ausgabe (`*_processed.xlsx`) wird im selben Verzeichnis wie die Eingabedatei erzeugt.
@@ -61,15 +61,15 @@ Die Ausgabe (`*_processed.xlsx`) wird im selben Verzeichnis wie die Eingabedatei
 ### MoneyMoney Monats-Export
 
 ```bash
-./money_money/export_transactions 2026 05
+./export_transactions 2026 05
 ```
 
-Die Ausgabe wird nach `tmp/accounting/2026/05/transactions.csv` verschoben.
+Die Ausgabe wird nach `tmp/staging/2026/05/transactions.csv` verschoben.
 
 ### MoneyMoney Rechnungssteller-Extraktion
 
 ```bash
-./money_money/extract_transactions 2026 01 github
+./extract_transactions 2026 01 github
 ```
 
 Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
@@ -77,7 +77,7 @@ Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
 ### MoneyMoney PDF-Matching
 
 ```bash
-./money_money/match_receipts 2026 01 github
+./match_receipts 2026 01 github
 ```
 
 Die passenden PDFs werden direkt nach `tmp/staging/2026/01/GitHub/` kopiert.
@@ -102,14 +102,14 @@ Danach startet der Download-Sync von diesem Remote-Root nach lokal so:
 
 ```bash
 cd /Users/bjoerne/Source/my-office
-./rclone/sync_app_scripts_data
+./sync_app_scripts_data
 ```
 
 Falls dein Remote anders heißt:
 
 ```bash
 cd /Users/bjoerne/Source/my-office
-RCLONE_REMOTE_NAME="meinremote" ./rclone/sync_app_scripts_data
+RCLONE_REMOTE_NAME="meinremote" ./sync_app_scripts_data
 ```
 
 Hinweis: Das Skript verwendet `rclone sync` von **remote nach lokal**. Lokale Dateien, die remote nicht existieren, werden dabei entfernt.

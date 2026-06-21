@@ -7,7 +7,7 @@ import os
 def ensure_project_venv():
     """Automatically use the project venv when available."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.dirname(script_dir)
+    repo_root = script_dir
     venv_python = os.path.join(repo_root, ".venv", "bin", "python")
 
     if not os.path.isfile(venv_python):
@@ -83,3 +83,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

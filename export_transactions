@@ -13,7 +13,7 @@ from pathlib import Path
 def ensure_project_venv() -> None:
     """Automatically use the project venv when available."""
     script_path = Path(__file__).resolve()
-    repo_root = script_path.parent.parent
+    repo_root = script_path.parent
     venv_python = repo_root / ".venv" / "bin" / "python"
 
     if not venv_python.is_file():
@@ -77,7 +77,7 @@ def run_export(script_path: Path, from_date: str, to_date: str) -> Path:
 
 
 def move_export(csv_path: Path, repo_root: Path, year: int, month: int) -> Path:
-    destination_dir = repo_root / "tmp" / "accounting" / f"{year:04d}" / f"{month:02d}"
+    destination_dir = repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}"
     destination_dir.mkdir(parents=True, exist_ok=True)
 
     destination_path = destination_dir / "transactions.csv"
@@ -100,7 +100,7 @@ def main() -> None:
     from_date, to_date = month_bounds(year, month)
 
     script_path = Path(__file__).resolve().parent / "applescript" / "transactions.applescript"
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent
 
     if not script_path.is_file():
         print(f"AppleScript nicht gefunden: {script_path}")
@@ -118,4 +118,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 

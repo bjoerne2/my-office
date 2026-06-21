@@ -9,9 +9,9 @@ Verwendung:
   sync_app_scripts_data [weitere-rclone-optionen]
 
 Beispiele:
-  ./rclone/sync_app_scripts_data
-  RCLONE_REMOTE_NAME="gdrive" ./rclone/sync_app_scripts_data
-  ./rclone/sync_app_scripts_data --dry-run
+  ./sync_app_scripts_data
+  RCLONE_REMOTE_NAME="gdrive" ./sync_app_scripts_data
+  ./sync_app_scripts_data --dry-run
 
 Hinweise:
 - Verwendet den Root des konfigurierten rclone-Remotes (z.B. per root_folder_id festgelegt).
@@ -22,7 +22,7 @@ EOF
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$SCRIPT_DIR"
 LOCAL_DIR="$REPO_ROOT/tmp/app_scripts_data"
 DEFAULT_REMOTE_NAME="gdrive"
 
@@ -82,6 +82,8 @@ if ! "${cmd[@]}"; then
 fi
 
 echo "Fertig."
+
+
 
 
 

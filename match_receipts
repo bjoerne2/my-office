@@ -40,7 +40,7 @@ class PdfCandidate:
 def ensure_project_venv() -> None:
     """Automatically use the project venv when available."""
     script_path = Path(__file__).resolve()
-    repo_root = script_path.parent.parent
+    repo_root = script_path.parent
     venv_python = repo_root / ".venv" / "bin" / "python"
 
     if not venv_python.is_file():
@@ -191,7 +191,7 @@ def main() -> None:
         print(exc)
         sys.exit(1)
 
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent
     csv_path = transactions_csv_path(repo_root, year, month, vendor)
     pdf_dir = app_data_dir(repo_root)
     target_dir = staging_dir(repo_root, year, month, vendor)
@@ -219,4 +219,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
