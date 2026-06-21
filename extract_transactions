@@ -5,24 +5,9 @@ from __future__ import annotations
 import csv
 import os
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
-
-@dataclass(frozen=True)
-class VendorRule:
-	slug: str
-	directory_name: str
-	match_terms: tuple[str, ...]
-
-
-VENDOR_RULES: dict[str, VendorRule] = {
-	"github": VendorRule(
-		slug="github",
-		directory_name="GitHub",
-		match_terms=("github, inc.",),
-	),
-}
+from vendors import VendorRule, get_vendor_rule
 
 
 def ensure_project_venv() -> None:
@@ -61,11 +46,7 @@ def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
 		raise ValueError(f"Ungültiger Monat: {month}")
 
 	vendor_slug = argv[2].strip().lower()
-	if vendor_slug not in VENDOR_RULES:
-		supported = ", ".join(sorted(VENDOR_RULES))
-		raise ValueError(f"Unbekannter Rechnungssteller: {argv[2]}. Unterstützt: {supported}")
-
-	return year, month, VENDOR_RULES[vendor_slug]
+	return year, month, get_vendor_rule(vendor_slug)
 
 
 def source_csv_path(repo_root: Path, year: int, month: int) -> Path:

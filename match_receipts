@@ -11,24 +11,10 @@ from dataclasses import dataclass
 from datetime import datetime, date
 from pathlib import Path
 
+from vendors import VendorRule, get_vendor_rule
+
 
 DATE_PATTERN = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
-
-
-@dataclass(frozen=True)
-class VendorRule:
-    slug: str
-    directory_name: str
-    pdf_prefix: str
-
-
-VENDOR_RULES: dict[str, VendorRule] = {
-    "github": VendorRule(
-        slug="github",
-        directory_name="GitHub",
-        pdf_prefix="github-",
-    ),
-}
 
 
 @dataclass(frozen=True)
@@ -73,11 +59,7 @@ def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
         raise ValueError(f"Ungültiger Monat: {month}")
 
     vendor_slug = argv[2].strip().lower()
-    if vendor_slug not in VENDOR_RULES:
-        supported = ", ".join(sorted(VENDOR_RULES))
-        raise ValueError(f"Unbekannter Rechnungssteller: {argv[2]}. Unterstützt: {supported}")
-
-    return year, month, VENDOR_RULES[vendor_slug]
+    return year, month, get_vendor_rule(vendor_slug)
 
 
 def transactions_csv_path(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:

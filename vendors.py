@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class VendorRule:
+    slug: str
+    directory_name: str
+    match_terms: tuple[str, ...] = ()
+    pdf_prefix: str = ""
+
+
+VENDOR_RULES: dict[str, VendorRule] = {
+    "github": VendorRule(
+        slug="github",
+        directory_name="GitHub",
+        match_terms=("github, inc.",),
+        pdf_prefix="github-",
+    ),
+}
+
+
+def get_vendor_rule(vendor_slug: str) -> VendorRule:
+    normalized_slug = vendor_slug.strip().lower()
+
+    try:
+        return VENDOR_RULES[normalized_slug]
+    except KeyError as exc:
+        supported = ", ".join(sorted(VENDOR_RULES))
+        raise ValueError(
+            f"Unbekannter Rechnungssteller: {vendor_slug}. Unterstützt: {supported}"
+        ) from exc
+

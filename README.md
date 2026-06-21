@@ -8,6 +8,7 @@ Aktuell enthalten:
 - `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/staging/<jahr>/<monat>/transactions.csv`.
 - `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data` und kopiert sie direkt in den Staging-Monatsordner.
+- `create_transaction_pdf`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
@@ -81,6 +82,15 @@ Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
 ```
 
 Die passenden PDFs werden direkt nach `tmp/staging/2026/01/GitHub/` kopiert.
+
+### MoneyMoney Transaktions-PDF erzeugen
+
+```bash
+./create_transaction_pdf 2026 01 github
+```
+
+Das Skript liest `tmp/staging/2026/01/GitHub/transactions.csv` und erzeugt pro Zeile ein PDF mit einer einfachen
+Schlüssel/Wert-Tabelle direkt in `tmp/staging/2026/01/GitHub/`.
 
 ## rclone / Google Drive Sync
 

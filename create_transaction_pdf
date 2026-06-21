@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import csv
+import os
+import sys
+from pathlib import Path
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+from vendors import VendorRule, get_vendor_rule
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if Path(sys.executable).resolve() == venv_python.resolve():
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+def usage() -> str:
+    return "Usage: create_transaction_pdf <year> <month> <rechnungssteller>"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
+    if len(argv) != 3:
+        raise ValueError(usage())
+
+    try:
+        year = int(argv[0])
+        month = int(argv[1])
+    except ValueError as exc:
+        raise ValueError("Jahr und Monat müssen numerisch sein, z.B. 2026 01") from exc
+
+    if year < 1900 or year > 9999:
+        raise ValueError(f"Ungültiges Jahr: {year}")
+
+    if month < 1 or month > 12:
+        raise ValueError(f"Ungültiger Monat: {month}")
+
+    return year, month, get_vendor_rule(argv[2])
+
+
+def transactions_csv_path(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
+    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name / "transactions.csv"
+
+
+def output_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
+    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name
+
+
+def read_transactions(csv_path: Path) -> tuple[list[str], list[list[str]]]:
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle, delimiter=";")
+
+        try:
+            header = next(reader)
+        except StopIteration as exc:
+            raise RuntimeError(f"Leere CSV-Datei: {csv_path}") from exc
+
+        rows = [row for row in reader if row and any(cell.strip() for cell in row)]
+
+    if not rows:
+        raise RuntimeError(f"Keine Transaktionen in {csv_path} gefunden")
+
+    return header, rows
+
+
+def sanitize_filename_part(value: str) -> str:
+    sanitized = "".join(character if character.isalnum() else "-" for character in value.strip())
+    sanitized = "-".join(part for part in sanitized.split("-") if part)
+    return sanitized.lower() or "transaction"
+
+
+def transaction_pdf_path(target_dir: Path, row: list[str], index: int) -> Path:
+    booking_date = row[0].strip() if row else ""
+    booking_date_slug = booking_date.replace(".", "-") if booking_date else f"row-{index:03d}"
+    filename = f"transaction-{booking_date_slug}-{index:03d}.pdf"
+    return target_dir / filename
+
+
+def build_table_data(header: list[str], row: list[str]) -> list[list[str]]:
+    pairs: list[list[str]] = []
+    for key, value in zip(header, row):
+        pairs.append([key, value or ""])
+    return pairs
+
+
+def write_transaction_pdf(output_path: Path, vendor: VendorRule, header: list[str], row: list[str], index: int) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph(f"{vendor.directory_name} – Transaktion {index:03d}", styles["Title"]),
+        Spacer(1, 8 * mm),
+    ]
+
+    table = Table(build_table_data(header, row), colWidths=[55 * mm, 115 * mm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f0f0")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.black),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("LEADING", (0, 0), (-1, -1), 12),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    story.append(table)
+
+    document = SimpleDocTemplate(
+        str(output_path),
+        pagesize=A4,
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+        topMargin=15 * mm,
+        bottomMargin=15 * mm,
+        title=f"{vendor.directory_name} Transaktion {index:03d}",
+    )
+    document.build(story)
+
+
+def main() -> None:
+    ensure_project_venv()
+
+    try:
+        year, month, vendor = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent
+    csv_path = transactions_csv_path(repo_root, year, month, vendor)
+    target_dir = output_dir(repo_root, year, month, vendor)
+
+    if not csv_path.is_file():
+        print(f"Transaktionsdatei nicht gefunden: {csv_path}")
+        sys.exit(1)
+
+    try:
+        header, rows = read_transactions(csv_path)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    created_paths: list[Path] = []
+    for index, row in enumerate(rows, start=1):
+        pdf_path = transaction_pdf_path(target_dir, row, index)
+        write_transaction_pdf(pdf_path, vendor, header, row, index)
+        created_paths.append(pdf_path)
+
+    for path in created_paths:
+        print(path)
+
+
+if __name__ == "__main__":
+    main()
+
