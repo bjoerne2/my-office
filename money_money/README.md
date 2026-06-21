@@ -7,6 +7,7 @@ Dieses Verzeichnis enthält Hilfsskripte für Exporte aus MoneyMoney.
 - `applescript/transactions.applescript` – exportiert Umsätze für einen Datumsbereich
 - `applescript/accounts.applescript` – exportiert Konten
 - `export_transactions` – Python-Wrapper für Monats-Exporte
+- `extract_transactions` – filtert `transactions.csv` für einen Rechnungssteller in einen Staging-Ordner
 
 ## Direkter AppleScript-Aufruf
 
@@ -28,4 +29,14 @@ Der Wrapper:
 2. ruft das AppleScript auf
 3. verschiebt die erzeugte Datei nach
    `tmp/accounting/2026/05/transactions.csv`
+
+## Rechnungssteller extrahieren
+
+```bash
+/Users/bjoerne/Source/my-office/money_money/extract_transactions 2026 01 github
+```
+
+Das Skript liest `tmp/accounting/2026/01/transactions.csv`, filtert aktuell für den Rechnungssteller `github`
+und schreibt die Headerzeile plus Treffer nach
+`tmp/staging/2026/01/GitHub/transactions.csv`.
 

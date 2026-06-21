@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import csv
+import os
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class VendorRule:
+	slug: str
+	directory_name: str
+	match_terms: tuple[str, ...]
+
+
+VENDOR_RULES: dict[str, VendorRule] = {
+	"github": VendorRule(
+		slug="github",
+		directory_name="GitHub",
+		match_terms=("github, inc.",),
+	),
+}
+
+
+def ensure_project_venv() -> None:
+	"""Automatically use the project venv when available."""
+	script_path = Path(__file__).resolve()
+	repo_root = script_path.parent.parent
+	venv_python = repo_root / ".venv" / "bin" / "python"
+
+	if not venv_python.is_file():
+		return
+
+	if Path(sys.executable).resolve() == venv_python.resolve():
+		return
+
+	os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+def usage() -> str:
+	return "Usage: extract_transactions <year> <month> <rechnungssteller>"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
+	if len(argv) != 3:
+		raise ValueError(usage())
+
+	try:
+		year = int(argv[0])
+		month = int(argv[1])
+	except ValueError as exc:
+		raise ValueError("Jahr und Monat müssen numerisch sein, z.B. 2026 01") from exc
+
+	if year < 1900 or year > 9999:
+		raise ValueError(f"Ungültiges Jahr: {year}")
+
+	if month < 1 or month > 12:
+		raise ValueError(f"Ungültiger Monat: {month}")
+
+	vendor_slug = argv[2].strip().lower()
+	if vendor_slug not in VENDOR_RULES:
+		supported = ", ".join(sorted(VENDOR_RULES))
+		raise ValueError(f"Unbekannter Rechnungssteller: {argv[2]}. Unterstützt: {supported}")
+
+	return year, month, VENDOR_RULES[vendor_slug]
+
+
+def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
+	return repo_root / "tmp" / "accounting" / f"{year:04d}" / f"{month:02d}" / "transactions.csv"
+
+
+def destination_csv_path(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
+	return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name / "transactions.csv"
+
+
+def row_matches_vendor(row: list[str], vendor: VendorRule) -> bool:
+	haystack = " ".join(cell.strip().lower() for cell in row)
+	return any(term in haystack for term in vendor.match_terms)
+
+
+def extract_rows(input_path: Path, vendor: VendorRule) -> tuple[list[str], list[list[str]]]:
+	with input_path.open("r", encoding="utf-8-sig", newline="") as handle:
+		reader = csv.reader(handle, delimiter=";")
+
+		try:
+			header = next(reader)
+		except StopIteration as exc:
+			raise RuntimeError(f"Leere CSV-Datei: {input_path}") from exc
+
+		matches = [row for row in reader if row_matches_vendor(row, vendor)]
+
+	return header, matches
+
+
+def write_output(output_path: Path, header: list[str], rows: list[list[str]]) -> None:
+	output_path.parent.mkdir(parents=True, exist_ok=True)
+
+	with output_path.open("w", encoding="utf-8", newline="") as handle:
+		writer = csv.writer(handle, delimiter=";", lineterminator="\n")
+		writer.writerow(header)
+		writer.writerows(rows)
+
+
+def main() -> None:
+	ensure_project_venv()
+
+	try:
+		year, month, vendor = parse_args(sys.argv[1:])
+	except ValueError as exc:
+		print(exc)
+		sys.exit(1)
+
+	repo_root = Path(__file__).resolve().parent.parent
+	input_path = source_csv_path(repo_root, year, month)
+	output_path = destination_csv_path(repo_root, year, month, vendor)
+
+	if not input_path.is_file():
+		print(f"Quelldatei nicht gefunden: {input_path}")
+		sys.exit(1)
+
+	try:
+		header, matches = extract_rows(input_path, vendor)
+	except RuntimeError as exc:
+		print(f"Fehler: {exc}")
+		sys.exit(1)
+
+	if not matches:
+		print(f"Keine Transaktionen für Rechnungssteller {vendor.directory_name} gefunden: {input_path}")
+		sys.exit(1)
+
+	write_output(output_path, header, matches)
+	print(output_path)
+
+
+if __name__ == "__main__":
+	main()
+

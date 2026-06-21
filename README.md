@@ -6,6 +6,7 @@ Aktuell enthalten:
 
 - `monkkee/process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
 - `money_money/export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/accounting/<jahr>/<monat>/transactions.csv`.
+- `money_money/extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
 - `rclone/sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
@@ -63,6 +64,14 @@ Die Ausgabe (`*_processed.xlsx`) wird im selben Verzeichnis wie die Eingabedatei
 ```
 
 Die Ausgabe wird nach `tmp/accounting/2026/05/transactions.csv` verschoben.
+
+### MoneyMoney Rechnungssteller-Extraktion
+
+```bash
+./money_money/extract_transactions 2026 01 github
+```
+
+Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
 
 ## rclone / Google Drive Sync
 
