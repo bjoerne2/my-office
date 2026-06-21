@@ -24,7 +24,6 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOCAL_DIR="$REPO_ROOT/tmp/app_scripts_data"
-LOG_DIR="$SCRIPT_DIR/logs"
 DEFAULT_REMOTE_NAME="gdrive"
 
 remote_name="${RCLONE_REMOTE_NAME:-$DEFAULT_REMOTE_NAME}"
@@ -55,12 +54,6 @@ while (($# > 0)); do
   esac
 done
 
-if ! command -v rclone >/dev/null 2>&1; then
-  echo "Fehler: rclone ist nicht installiert oder nicht im PATH verfuegbar." >&2
-  echo "Siehe /Users/bjoerne/Source/my-office/README.md fuer die Installation." >&2
-  exit 1
-fi
-
 if [[ -z "$remote_name" ]]; then
   echo "Fehler: Der rclone-Remote-Name ist leer." >&2
   echo >&2
@@ -68,20 +61,15 @@ if [[ -z "$remote_name" ]]; then
   exit 1
 fi
 
-mkdir -p "$LOCAL_DIR" "$LOG_DIR"
-
-log_file="$LOG_DIR/sync_app_scripts_data_$(date +%Y%m%d_%H%M%S).log"
+mkdir -p "$LOCAL_DIR"
 
 echo "Starte unidirektionalen Sync (remote -> lokal)"
 echo "  Lokal : $LOCAL_DIR"
 echo "  Remote: $remote_path"
-echo "  Log   : $log_file"
 
 cmd=(
   rclone sync "$remote_path" "$LOCAL_DIR"
   --create-empty-src-dirs
-  --log-file "$log_file"
-  --log-level INFO
 )
 
 if ((${#extra_args[@]} > 0)); then
@@ -89,11 +77,11 @@ if ((${#extra_args[@]} > 0)); then
 fi
 
 if ! "${cmd[@]}"; then
-  echo "Sync fehlgeschlagen. Details siehe $log_file" >&2
+  echo "Sync fehlgeschlagen." >&2
   exit 1
 fi
 
-echo "Fertig. Details siehe $log_file"
+echo "Fertig."
 
 
 
