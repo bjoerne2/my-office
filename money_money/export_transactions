@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import calendar
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if Path(sys.executable).resolve() == venv_python.resolve():
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+def usage() -> str:
+    return "Usage: export_transactions <year> <month>"
+
+
+def parse_year_month(argv: list[str]) -> tuple[int, int]:
+    if len(argv) != 2:
+        raise ValueError(usage())
+
+    try:
+        year = int(argv[0])
+        month = int(argv[1])
+    except ValueError as exc:
+        raise ValueError("Jahr und Monat müssen numerisch sein, z.B. 2026 05") from exc
+
+    if year < 1900 or year > 9999:
+        raise ValueError(f"Ungültiges Jahr: {year}")
+
+    if month < 1 or month > 12:
+        raise ValueError(f"Ungültiger Monat: {month}")
+
+    return year, month
+
+
+def month_bounds(year: int, month: int) -> tuple[str, str]:
+    last_day = calendar.monthrange(year, month)[1]
+    return f"{year:04d}-{month:02d}-01", f"{year:04d}-{month:02d}-{last_day:02d}"
+
+
+def run_export(script_path: Path, from_date: str, to_date: str) -> Path:
+    result = subprocess.run(
+        ["osascript", str(script_path), from_date, to_date],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        error_output = (result.stderr or result.stdout).strip()
+        raise RuntimeError(error_output or "AppleScript-Aufruf fehlgeschlagen")
+
+    output = result.stdout.strip()
+    if not output:
+        raise RuntimeError("MoneyMoney hat keinen Exportpfad zurückgegeben")
+
+    csv_path = Path(output)
+    if not csv_path.is_file():
+        raise RuntimeError(f"Exportierte CSV nicht gefunden: {csv_path}")
+
+    return csv_path
+
+
+def move_export(csv_path: Path, repo_root: Path, year: int, month: int) -> Path:
+    destination_dir = repo_root / "tmp" / "accounting" / f"{year:04d}" / f"{month:02d}"
+    destination_dir.mkdir(parents=True, exist_ok=True)
+
+    destination_path = destination_dir / "transactions.csv"
+    if destination_path.exists():
+        destination_path.unlink()
+
+    shutil.move(str(csv_path), str(destination_path))
+    return destination_path
+
+
+def main() -> None:
+    ensure_project_venv()
+
+    try:
+        year, month = parse_year_month(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    from_date, to_date = month_bounds(year, month)
+
+    script_path = Path(__file__).resolve().parent / "applescript" / "transactions.applescript"
+    repo_root = Path(__file__).resolve().parent.parent
+
+    if not script_path.is_file():
+        print(f"AppleScript nicht gefunden: {script_path}")
+        sys.exit(1)
+
+    try:
+        csv_path = run_export(script_path, from_date, to_date)
+        destination_path = move_export(csv_path, repo_root, year, month)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    print(destination_path)
+
+
+if __name__ == "__main__":
+    main()
+

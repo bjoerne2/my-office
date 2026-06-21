@@ -5,6 +5,7 @@ Dieses Repository enthält kleine Office-Automatisierungen.
 Aktuell enthalten:
 
 - `monkkee/process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
+- `money_money/export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/accounting/<jahr>/<monat>/transactions.csv`.
 
 ## Voraussetzungen
 
@@ -53,3 +54,12 @@ Wenn neue Pakete hinzukommen:
 ```
 
 Die Ausgabe (`*_processed.xlsx`) wird im selben Verzeichnis wie die Eingabedatei erzeugt.
+
+### MoneyMoney Monats-Export
+
+```bash
+./money_money/export_transactions 2026 05
+```
+
+Die Ausgabe wird nach `tmp/accounting/2026/05/transactions.csv` verschoben.
+
