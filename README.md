@@ -6,6 +6,7 @@ Aktuell enthalten:
 
 - `monkkee/process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
 - `money_money/export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/accounting/<jahr>/<monat>/transactions.csv`.
+- `rclone/sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` bidirektional mit Google Drive.
 
 ## Voraussetzungen
 
@@ -62,4 +63,33 @@ Die Ausgabe (`*_processed.xlsx`) wird im selben Verzeichnis wie die Eingabedatei
 ```
 
 Die Ausgabe wird nach `tmp/accounting/2026/05/transactions.csv` verschoben.
+
+## rclone / Google Drive Sync
+
+Installation unter macOS:
+
+```bash
+brew update
+brew install rclone
+```
+
+Google Drive als Remote einrichten:
+
+```bash
+rclone config
+```
+
+Danach z.B. `gdrive` als Remote anlegen und den ersten Sync mit `--resync` starten:
+
+```bash
+cd /Users/bjoerne/Source/my-office
+./rclone/sync_app_scripts_data gdrive:app_scripts_data --resync
+```
+
+Spätere Läufe:
+
+```bash
+cd /Users/bjoerne/Source/my-office
+RCLONE_REMOTE_PATH="gdrive:app_scripts_data" ./rclone/sync_app_scripts_data
+```
 
