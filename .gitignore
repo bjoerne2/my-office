@@ -1,5 +1,4 @@
 .idea
 .venv/
 tmp/
-rclone/.bisync/
 rclone/logs/

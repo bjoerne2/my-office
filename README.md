@@ -6,7 +6,7 @@ Aktuell enthalten:
 
 - `monkkee/process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
 - `money_money/export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/accounting/<jahr>/<monat>/transactions.csv`.
-- `rclone/sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` bidirektional mit Google Drive.
+- `rclone/sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
 
@@ -79,17 +79,20 @@ Google Drive als Remote einrichten:
 rclone config
 ```
 
-Danach z.B. `gdrive` als Remote anlegen und den ersten Sync mit `--resync` starten:
+Danach z.B. `gdrive` als Remote anlegen und den Download-Sync von Google Drive nach lokal starten:
 
 ```bash
 cd /Users/bjoerne/Source/my-office
-./rclone/sync_app_scripts_data gdrive:app_scripts_data --resync
+./rclone/sync_app_scripts_data gdrive:app_scripts_data
 ```
 
-Spätere Läufe:
+Alternativ per Umgebungsvariable:
 
 ```bash
 cd /Users/bjoerne/Source/my-office
 RCLONE_REMOTE_PATH="gdrive:app_scripts_data" ./rclone/sync_app_scripts_data
 ```
+
+Hinweis: Das Skript verwendet `rclone sync` von **remote nach lokal**. Lokale Dateien, die remote nicht existieren, werden dabei entfernt.
+Falls `gdrive:app_scripts_data` noch nicht existiert, kannst du den Ordner vorher mit `rclone mkdir gdrive:app_scripts_data` anlegen.
 

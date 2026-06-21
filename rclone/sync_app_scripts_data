@@ -3,27 +3,26 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Synchronisiert tmp/app_scripts_data bidirektional mit einem Google-Drive-Ordner via rclone bisync.
+Synchronisiert tmp/app_scripts_data unidirektional von einem Google-Drive-Ordner nach lokal via rclone sync.
 
 Verwendung:
-  sync_app_scripts_data [<remote:path>] [--resync] [weitere-rclone-optionen]
+  sync_app_scripts_data [<remote:path>] [weitere-rclone-optionen]
 
 Beispiele:
-  ./rclone/sync_app_scripts_data gdrive:app_scripts_data --resync
+  ./rclone/sync_app_scripts_data gdrive:app_scripts_data
   RCLONE_REMOTE_PATH="gdrive:app_scripts_data" ./rclone/sync_app_scripts_data
   RCLONE_REMOTE_PATH="gdrive:app_scripts_data" ./rclone/sync_app_scripts_data --dry-run
 
 Hinweise:
-- Beim allerersten Lauf ist in der Regel --resync sinnvoll.
 - Wenn kein <remote:path> uebergeben wird, wird RCLONE_REMOTE_PATH verwendet.
-- Weitere Optionen werden direkt an "rclone bisync" durchgereicht.
+- Lokale Dateien, die remote nicht existieren, werden durch "rclone sync" geloescht.
+- Weitere Optionen werden direkt an "rclone sync" durchgereicht.
 EOF
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOCAL_DIR="$REPO_ROOT/tmp/app_scripts_data"
-WORK_DIR="$SCRIPT_DIR/.bisync"
 LOG_DIR="$SCRIPT_DIR/logs"
 
 remote_path="${RCLONE_REMOTE_PATH:-}"
@@ -57,7 +56,7 @@ done
 
 if ! command -v rclone >/dev/null 2>&1; then
   echo "Fehler: rclone ist nicht installiert oder nicht im PATH verfuegbar." >&2
-  echo "Siehe /Users/bjoerne/Source/my-office/rclone/README.md fuer die Installation." >&2
+  echo "Siehe /Users/bjoerne/Source/my-office/README.md fuer die Installation." >&2
   exit 1
 fi
 
@@ -68,23 +67,30 @@ if [[ -z "$remote_path" ]]; then
   exit 1
 fi
 
-mkdir -p "$LOCAL_DIR" "$WORK_DIR" "$LOG_DIR"
+mkdir -p "$LOCAL_DIR" "$LOG_DIR"
 
 log_file="$LOG_DIR/sync_app_scripts_data_$(date +%Y%m%d_%H%M%S).log"
 
-echo "Starte bidirektionalen Sync"
+echo "Starte unidirektionalen Sync (remote -> lokal)"
 echo "  Lokal : $LOCAL_DIR"
 echo "  Remote: $remote_path"
 echo "  Log   : $log_file"
 
-rclone bisync "$LOCAL_DIR" "$remote_path" \
-  --check-access \
-  --create-empty-src-dirs \
-  --compare size,modtime \
-  --workdir "$WORK_DIR" \
-  --log-file "$log_file" \
-  --log-level INFO \
-  "${extra_args[@]}"
+cmd=(
+  rclone sync "$remote_path" "$LOCAL_DIR"
+  --create-empty-src-dirs
+  --log-file "$log_file"
+  --log-level INFO
+)
+
+if ((${#extra_args[@]} > 0)); then
+  cmd+=("${extra_args[@]}")
+fi
+
+if ! "${cmd[@]}"; then
+  echo "Sync fehlgeschlagen. Details siehe $log_file" >&2
+  exit 1
+fi
 
 echo "Fertig. Details siehe $log_file"
 
