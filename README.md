@@ -7,7 +7,7 @@ Aktuell enthalten:
 - `process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
 - `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/staging/<jahr>/<monat>/transactions.csv`.
 - `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
-- `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data` und kopiert sie direkt in den Staging-Monatsordner.
+- `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data/<Rechnungssteller>` und kopiert sie direkt in den Staging-Monatsordner.
 - `create_transaction_pdf`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
 - `merge_receipt_and_transaction_pdf`: Führt Rechnungs-PDF und Kontobeleg-PDF zu `beleg_und_buchung.pdf` zusammen.
 - `process_vendor_month`: Führt alle Schritte für einen Anbieter und Monat als Gesamt-Workflow aus.
@@ -91,7 +91,7 @@ Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
 ./match_receipts 2026 01 github
 ```
 
-Die passenden PDFs werden direkt nach `tmp/staging/2026/01/GitHub/` kopiert.
+Die passenden PDFs werden aus `tmp/app_scripts_data/GitHub/` gelesen und direkt nach `tmp/staging/2026/01/GitHub/` kopiert.
 
 ### MoneyMoney Transaktions-PDF erzeugen
 
@@ -162,4 +162,3 @@ RCLONE_REMOTE_NAME="meinremote" ./sync_app_scripts_data
 ```
 
 Hinweis: Das Skript verwendet `rclone sync` von **remote nach lokal**. Lokale Dateien, die remote nicht existieren, werden dabei entfernt.
-

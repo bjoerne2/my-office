@@ -61,8 +61,8 @@ def staging_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> P
     return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name
 
 
-def app_data_dir(repo_root: Path) -> Path:
-    return repo_root / "tmp" / "app_scripts_data"
+def app_data_dir(repo_root: Path, vendor: VendorRule) -> Path:
+    return repo_root / "tmp" / "app_scripts_data" / vendor.directory_name
 
 
 def parse_ddmmyyyy(value: str) -> date:
@@ -166,7 +166,7 @@ def main() -> None:
 
     repo_root = Path(__file__).resolve().parent
     csv_path = transactions_csv_path(repo_root, year, month, vendor)
-    pdf_dir = app_data_dir(repo_root)
+    pdf_dir = app_data_dir(repo_root, vendor)
     target_dir = staging_dir(repo_root, year, month, vendor)
 
     if not csv_path.is_file():
@@ -194,5 +194,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 
