@@ -10,6 +10,7 @@ Aktuell enthalten:
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data` und kopiert sie direkt in den Staging-Monatsordner.
 - `create_transaction_pdf`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
 - `merge_receipt_and_transaction_pdf`: Führt Rechnungs-PDF und Kontobeleg-PDF zu `beleg_und_buchung.pdf` zusammen.
+- `process_vendor_month`: Führt alle Schritte für einen Anbieter und Monat als Gesamt-Workflow aus.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
@@ -101,6 +102,26 @@ Schlüssel/Wert-Tabelle direkt in `tmp/staging/2026/01/GitHub/`.
 
 Das Skript führt das Rechnungs-PDF und das erzeugte Kontobeleg-PDF im Ordner
 `tmp/staging/2026/01/GitHub/` zu `beleg_und_buchung.pdf` zusammen.
+
+### Gesamt-Workflow für einen Anbieter
+
+```bash
+./process_vendor_month 2026 01 github
+```
+
+Der Workflow führt nacheinander aus:
+
+1. `export_transactions`
+2. `extract_transactions`
+3. `match_receipts`
+4. `create_transaction_pdf`
+5. `merge_receipt_and_transaction_pdf`
+
+Wenn die Exportdatei bereits vorhanden ist und der MoneyMoney-Export übersprungen werden soll:
+
+```bash
+./process_vendor_month 2026 01 github --skip-export
+```
 
 ## rclone / Google Drive Sync
 

@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+SCRIPT_SEQUENCE = (
+    "export_transactions",
+    "extract_transactions",
+    "match_receipts",
+    "create_transaction_pdf",
+    "merge_receipt_and_transaction_pdf",
+)
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+ensure_project_venv()
+
+
+def usage() -> str:
+    return "Usage: process_vendor_month <year> <month> <rechnungssteller> [--skip-export]"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, str, bool]:
+    if len(argv) not in (3, 4):
+        raise ValueError(usage())
+
+    try:
+        year = int(argv[0])
+        month = int(argv[1])
+    except ValueError as exc:
+        raise ValueError("Jahr und Monat müssen numerisch sein, z.B. 2026 01") from exc
+
+    if year < 1900 or year > 9999:
+        raise ValueError(f"Ungültiges Jahr: {year}")
+
+    if month < 1 or month > 12:
+        raise ValueError(f"Ungültiger Monat: {month}")
+
+    vendor = argv[2].strip().lower()
+    skip_export = False
+
+    if len(argv) == 4:
+        if argv[3] != "--skip-export":
+            raise ValueError(f"Unbekannte Option: {argv[3]}\n{usage()}")
+        skip_export = True
+
+    return year, month, vendor, skip_export
+
+
+def run_step(repo_root: Path, script_name: str, args: list[str]) -> None:
+    script_path = repo_root / script_name
+    if not script_path.is_file():
+        raise RuntimeError(f"Skript nicht gefunden: {script_path}")
+
+    command = [str(script_path), *args]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+
+    if result.stdout:
+        print(result.stdout.strip())
+
+    if result.returncode != 0:
+        error_output = result.stderr.strip() if result.stderr else ""
+        details = error_output or result.stdout.strip() or f"{script_name} fehlgeschlagen"
+        raise RuntimeError(details)
+
+
+def main() -> None:
+    try:
+        year, month, vendor, skip_export = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent
+    base_args = [f"{year:04d}", f"{month:02d}", vendor]
+
+    steps: list[tuple[str, list[str]]] = []
+    if not skip_export:
+        steps.append(("export_transactions", base_args[:2]))
+    steps.extend(
+        [
+            ("extract_transactions", base_args),
+            ("match_receipts", base_args),
+            ("create_transaction_pdf", base_args),
+            ("merge_receipt_and_transaction_pdf", base_args),
+        ]
+    )
+
+    try:
+        for script_name, args in steps:
+            print(f"==> {script_name} {' '.join(args)}")
+            run_step(repo_root, script_name, args)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+
