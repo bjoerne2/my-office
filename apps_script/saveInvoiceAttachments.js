@@ -8,6 +8,11 @@ function saveInvoiceAttachments() {
     let savedCount = 0;
     const messages = thread.getMessages();
     messages.forEach(message => {
+      Logger.log(
+        "E-Mail gefunden: Betreff='" + message.getSubject() +
+        "', Von='" + message.getFrom() +
+        "', Datum='" + message.getDate() + "'"
+      );
       const attachments = message.getAttachments();
       attachments.forEach(att => {
         if (att.getContentType() === "application/pdf") {
