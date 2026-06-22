@@ -6,53 +6,61 @@ from typing import Any
 
 
 META_FILENAME = "meta.json"
+MetaEntry = dict[str, Any]
 
 
 def meta_path(target_dir: Path) -> Path:
     return target_dir / META_FILENAME
 
 
-def read_meta(target_dir: Path) -> dict[str, Any]:
+def _normalize_meta_entries(data: Any) -> list[MetaEntry]:
+    if isinstance(data, list):
+        entries: list[MetaEntry] = []
+        for entry in data:
+            if not isinstance(entry, dict):
+                return []
+            entries.append(dict(entry))
+        return entries
+
+    if isinstance(data, dict):
+        return [dict(data)] if data else []
+
+    return []
+
+
+def read_meta_entries(target_dir: Path) -> list[MetaEntry]:
     path = meta_path(target_dir)
     if not path.is_file():
-        return {}
+        return []
 
     try:
         with path.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
     except (OSError, json.JSONDecodeError):
-        return {}
+        return []
 
-    return data if isinstance(data, dict) else {}
+    return _normalize_meta_entries(data)
 
 
-def write_meta(target_dir: Path, data: dict[str, Any]) -> Path:
+def write_meta_entries(target_dir: Path, entries: list[MetaEntry]) -> Path:
     target_dir.mkdir(parents=True, exist_ok=True)
     path = meta_path(target_dir)
     with path.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2, ensure_ascii=False)
+        json.dump(entries, handle, indent=2, ensure_ascii=False)
         handle.write("\n")
     return path
 
 
-def set_meta_value(target_dir: Path, key: str, value: Any) -> Path:
-    data = read_meta(target_dir)
-    data[key] = value
-    return write_meta(target_dir, data)
-
-
-def require_meta(target_dir: Path) -> dict[str, Any]:
+def require_meta_entries(target_dir: Path) -> list[MetaEntry]:
     path = meta_path(target_dir)
-    data = read_meta(target_dir)
-    if not data:
+    entries = read_meta_entries(target_dir)
+    if not entries:
         raise RuntimeError(f"meta.json nicht gefunden oder ungültig: {path}")
-    return data
+    return entries
 
 
-def require_meta_string(target_dir: Path, key: str) -> str:
-    data = require_meta(target_dir)
-    value = data.get(key)
+def require_meta_entry_string(entry: MetaEntry, key: str, *, entry_index: int) -> str:
+    value = entry.get(key)
     if not isinstance(value, str) or not value.strip():
-        raise RuntimeError(f"{key} fehlt in meta.json")
+        raise RuntimeError(f"{key} fehlt in meta.json Eintrag {entry_index}")
     return value.strip()
-

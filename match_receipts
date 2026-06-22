@@ -12,7 +12,7 @@ from datetime import datetime, date
 from pathlib import Path
 
 from python.args import validate_vendor, validate_year_month
-from python.meta import set_meta_value
+from python.meta import write_meta_entries
 from python.vendors import VendorRule, get_vendor_rule
 
 
@@ -181,8 +181,9 @@ def main() -> None:
         transaction_dates = read_transaction_dates(csv_path)
         candidates = collect_candidates(pdf_dir, vendor)
         matched_pdfs = [choose_best_candidate(transaction_date, candidates).path for transaction_date in transaction_dates]
+        meta_entries = [{"billing_filename": matched_pdf.name} for matched_pdf in matched_pdfs]
         copied_paths = copy_unique_pdfs(target_dir, matched_pdfs)
-        meta_path = set_meta_value(target_dir, "billing_filename", copied_paths[0].name)
+        meta_path = write_meta_entries(target_dir, meta_entries)
     except RuntimeError as exc:
         print(f"Fehler: {exc}")
         sys.exit(1)
@@ -194,4 +195,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

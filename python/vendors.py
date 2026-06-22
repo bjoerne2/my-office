@@ -12,6 +12,11 @@ class VendorRule:
 
 
 VENDOR_RULES: dict[str, VendorRule] = {
+    "aws": VendorRule(
+        slug="aws",
+        directory_name="AWS",
+        match_terms=("amazon web services", "aws emea"),
+    ),
     "github": VendorRule(
         slug="github",
         directory_name="GitHub",
@@ -31,5 +36,4 @@ def get_vendor_rule(vendor_slug: str) -> VendorRule:
         raise ValueError(
             f"Unbekannter Rechnungssteller: {vendor_slug}. Unterstützt: {supported}"
         ) from exc
-
 
