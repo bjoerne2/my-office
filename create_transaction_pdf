@@ -142,16 +142,17 @@ def build_table_data(header: list[str], row: list[str]) -> list[list[str]]:
     return pairs
 
 
-def write_transaction_pdf(output_path: Path, vendor: VendorRule, header: list[str], row: list[str], index: int) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+def read_billing_filename(target_dir: Path) -> str | None:
+    meta = read_meta(target_dir)
+    billing_filename = meta.get("billing_filename")
+    if isinstance(billing_filename, str) and billing_filename.strip():
+        return billing_filename.strip()
 
-    styles = getSampleStyleSheet()
-    story = [
-        Paragraph(f"{vendor.directory_name} – Transaktion {index:03d}", styles["Title"]),
-        Spacer(1, 8 * mm),
-    ]
+    return None
 
-    table = Table(build_table_data(header, row), colWidths=[55 * mm, 115 * mm])
+
+def make_table(table_data: list[list[str]]) -> Table:
+    table = Table(table_data, colWidths=[55 * mm, 115 * mm])
     table.setStyle(
         TableStyle(
             [
@@ -170,7 +171,30 @@ def write_transaction_pdf(output_path: Path, vendor: VendorRule, header: list[st
             ]
         )
     )
-    story.append(table)
+    return table
+
+
+def write_transaction_pdf(
+    output_path: Path,
+    vendor: VendorRule,
+    header: list[str],
+    row: list[str],
+    index: int,
+    billing_filename: str | None,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph("Buchung", styles["Title"]),
+        Spacer(1, 8 * mm),
+    ]
+
+    if billing_filename:
+        story.append(make_table([["Rechnung", billing_filename]]))
+        story.append(Spacer(1, 6 * mm))
+
+    story.append(make_table(build_table_data(header, row)))
 
     document = SimpleDocTemplate(
         str(output_path),
@@ -179,7 +203,7 @@ def write_transaction_pdf(output_path: Path, vendor: VendorRule, header: list[st
         rightMargin=15 * mm,
         topMargin=15 * mm,
         bottomMargin=15 * mm,
-        title=f"{vendor.directory_name} Transaktion {index:03d}",
+        title="Buchung",
     )
     document.build(story)
 
@@ -206,10 +230,12 @@ def main() -> None:
         print(f"Fehler: {exc}")
         sys.exit(1)
 
+    billing_filename = read_billing_filename(target_dir)
+
     created_paths: list[Path] = []
     for index, row in enumerate(rows, start=1):
         pdf_path = transaction_pdf_path(header, target_dir, row, index)
-        write_transaction_pdf(pdf_path, vendor, header, row, index)
+        write_transaction_pdf(pdf_path, vendor, header, row, index, billing_filename)
         created_paths.append(pdf_path)
 
     if created_paths:
