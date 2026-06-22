@@ -15,8 +15,8 @@ SCRIPT_SEQUENCE = (
     "export_transactions",
     "extract_transactions",
     "match_receipts",
-    "create_transaction_pdf",
-    "merge_receipt_and_transaction_pdf",
+    "create_transaction_pdfs",
+    "merge_receipt_and_transaction_pdfs",
 )
 
 
@@ -93,8 +93,8 @@ def main() -> None:
         [
             ("extract_transactions", base_args),
             ("match_receipts", base_args),
-            ("create_transaction_pdf", base_args),
-            ("merge_receipt_and_transaction_pdf", base_args),
+            ("create_transaction_pdfs", base_args),
+            ("merge_receipt_and_transaction_pdfs", base_args),
         ]
     )
 
@@ -109,4 +109,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -8,8 +8,8 @@ Aktuell enthalten:
 - `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/staging/<jahr>/<monat>/transactions.csv`.
 - `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data/<Rechnungssteller>` und kopiert sie direkt in den Staging-Monatsordner.
-- `create_transaction_pdf`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
-- `merge_receipt_and_transaction_pdf`: Führt Rechnungs-PDFs und Kontobeleg-PDFs paarweise zu kombinierten PDFs zusammen.
+- `create_transaction_pdfs`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
+- `merge_receipt_and_transaction_pdfs`: Führt Rechnungs-PDFs und Kontobeleg-PDFs paarweise zu kombinierten PDFs zusammen.
 - `process_vendor_month`: Führt alle Schritte für einen Anbieter und Monat als Gesamt-Workflow aus.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
@@ -97,7 +97,7 @@ und als Eintragsliste in `meta.json` abgelegt.
 ### MoneyMoney Transaktions-PDF erzeugen
 
 ```bash
-./create_transaction_pdf 2026 01 github
+./create_transaction_pdfs 2026 01 github
 ```
 
 Das Skript liest `tmp/staging/2026/01/GitHub/transactions.csv`, erzeugt pro Zeile ein PDF mit einer einfachen
@@ -106,7 +106,7 @@ Schlüssel/Wert-Tabelle direkt in `tmp/staging/2026/01/GitHub/` und ergänzt die
 ### Rechnung und Buchung zusammenführen
 
 ```bash
-./merge_receipt_and_transaction_pdf 2026 01 github
+./merge_receipt_and_transaction_pdfs 2026 01 github
 ```
 
 Das Skript führt die in `meta.json` zugeordneten Rechnungs- und Kontobeleg-PDFs im Ordner
@@ -123,8 +123,8 @@ Der Workflow führt nacheinander aus:
 1. `export_transactions`
 2. `extract_transactions`
 3. `match_receipts`
-4. `create_transaction_pdf`
-5. `merge_receipt_and_transaction_pdf`
+4. `create_transaction_pdfs`
+5. `merge_receipt_and_transaction_pdfs`
 
 Wenn die Exportdatei bereits vorhanden ist und der MoneyMoney-Export übersprungen werden soll:
 

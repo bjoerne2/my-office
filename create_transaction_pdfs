@@ -49,7 +49,7 @@ DATE_FIELD_LABELS = ("Datum", "Buchungstag")
 
 
 def usage() -> str:
-    return "Usage: create_transaction_pdf <year> <month> <rechnungssteller>"
+    return "Usage: create_transaction_pdfs <year> <month> <rechnungssteller>"
 
 
 def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:

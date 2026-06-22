@@ -33,7 +33,7 @@ from python.vendors import VendorRule, get_vendor_rule
 
 
 def usage() -> str:
-    return "Usage: merge_receipt_and_transaction_pdf <year> <month> <rechnungssteller>"
+    return "Usage: merge_receipt_and_transaction_pdfs <year> <month> <rechnungssteller>"
 
 
 def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
