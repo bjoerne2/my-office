@@ -32,3 +32,4 @@ def get_vendor_rule(vendor_slug: str) -> VendorRule:
             f"Unbekannter Rechnungssteller: {vendor_slug}. Unterstützt: {supported}"
         ) from exc
 
+

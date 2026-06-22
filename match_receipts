@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from datetime import datetime, date
 from pathlib import Path
 
-from vendors import VendorRule, get_vendor_rule
+from python.args import validate_vendor, validate_year_month
+from python.vendors import VendorRule, get_vendor_rule
 
 
 DATE_PATTERN = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
@@ -47,20 +48,9 @@ def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
     if len(argv) != 3:
         raise ValueError(usage())
 
-    try:
-        year = int(argv[0])
-        month = int(argv[1])
-    except ValueError as exc:
-        raise ValueError("Jahr und Monat müssen numerisch sein, z.B. 2026 01") from exc
-
-    if year < 1900 or year > 9999:
-        raise ValueError(f"Ungültiges Jahr: {year}")
-
-    if month < 1 or month > 12:
-        raise ValueError(f"Ungültiger Monat: {month}")
-
-    vendor_slug = argv[2].strip().lower()
-    return year, month, get_vendor_rule(vendor_slug)
+    year, month = validate_year_month(argv[0], argv[1], example="2026 01")
+    vendor = validate_vendor(argv[2], get_vendor_rule)
+    return year, month, vendor
 
 
 def transactions_csv_path(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:

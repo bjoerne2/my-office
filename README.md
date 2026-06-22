@@ -17,6 +17,13 @@ Aktuell enthalten:
 
 - Python ≥ 3.10 (z.B. installiert über Homebrew)
 
+## Gemeinsame Python-Hilfsmodule
+
+Wiederverwendbare Python-Helfer liegen unter `python/`, z. B.:
+
+- `python/args.py` für Argument-Validierung
+- `python/vendors.py` für Anbieter-/Namenszuordnungen
+
 ## Python Installation (Homebrew)
 
 ```bash

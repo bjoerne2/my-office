@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from python.args import validate_year_month
+
 
 def ensure_project_venv() -> None:
     """Automatically use the project venv when available."""
@@ -33,19 +35,7 @@ def parse_year_month(argv: list[str]) -> tuple[int, int]:
     if len(argv) != 2:
         raise ValueError(usage())
 
-    try:
-        year = int(argv[0])
-        month = int(argv[1])
-    except ValueError as exc:
-        raise ValueError("Jahr und Monat müssen numerisch sein, z.B. 2026 05") from exc
-
-    if year < 1900 or year > 9999:
-        raise ValueError(f"Ungültiges Jahr: {year}")
-
-    if month < 1 or month > 12:
-        raise ValueError(f"Ungültiger Monat: {month}")
-
-    return year, month
+    return validate_year_month(argv[0], argv[1], example="2026 05")
 
 
 def month_bounds(year: int, month: int) -> tuple[str, str]:
