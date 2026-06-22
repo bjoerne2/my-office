@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -28,6 +27,7 @@ ensure_project_venv()
 from pypdf import PdfWriter
 
 from python.args import validate_vendor, validate_year_month
+from python.meta import require_meta_string
 from python.vendors import VendorRule, get_vendor_rule
 
 
@@ -51,33 +51,9 @@ def staging_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> P
     return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name
 
 
-def meta_json_path(target_dir: Path) -> Path:
-    return target_dir / "meta.json"
-
-
-def read_meta(target_dir: Path) -> dict[str, object]:
-    meta_path = meta_json_path(target_dir)
-    if not meta_path.is_file():
-        raise RuntimeError(f"meta.json nicht gefunden: {meta_path}")
-
-    try:
-        with meta_path.open("r", encoding="utf-8") as handle:
-            meta = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"meta.json konnte nicht gelesen werden: {meta_path}") from exc
-
-    if not isinstance(meta, dict):
-        raise RuntimeError(f"meta.json hat kein gültiges Objektformat: {meta_path}")
-
-    return meta
-
-
-def resolve_pdf_from_meta(target_dir: Path, meta: dict[str, object], key: str, label: str) -> Path:
-    filename = meta.get(key)
-    if not isinstance(filename, str) or not filename.strip():
-        raise RuntimeError(f"{key} fehlt in meta.json")
-
-    pdf_path = target_dir / filename.strip()
+def resolve_pdf_from_meta(target_dir: Path, key: str, label: str) -> Path:
+    filename = require_meta_string(target_dir, key)
+    pdf_path = target_dir / filename
     if not pdf_path.is_file():
         raise RuntimeError(f"{label} nicht gefunden: {pdf_path}")
 
@@ -111,9 +87,8 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        meta = read_meta(target_dir)
-        receipt_pdf = resolve_pdf_from_meta(target_dir, meta, "billing_filename", "Rechnungs-PDF")
-        transaction_pdf = resolve_pdf_from_meta(target_dir, meta, "transaction_filename", "Kontobeleg-PDF")
+        receipt_pdf = resolve_pdf_from_meta(target_dir, "billing_filename", "Rechnungs-PDF")
+        transaction_pdf = resolve_pdf_from_meta(target_dir, "transaction_filename", "Kontobeleg-PDF")
         output_pdf = target_dir / OUTPUT_FILENAME
         merge_pdfs(receipt_pdf, transaction_pdf, output_pdf)
     except RuntimeError as exc:

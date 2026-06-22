@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import json
 import os
 import re
 import sys
@@ -34,6 +33,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from python.args import validate_vendor, validate_year_month
+from python.meta import read_meta, set_meta_value
 from python.vendors import VendorRule, get_vendor_rule
 
 
@@ -67,33 +67,6 @@ def transactions_csv_path(repo_root: Path, year: int, month: int, vendor: Vendor
 
 def output_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
     return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name
-
-
-def meta_json_path(target_dir: Path) -> Path:
-    return target_dir / "meta.json"
-
-
-def read_meta(target_dir: Path) -> dict[str, object]:
-    meta_path = meta_json_path(target_dir)
-    if not meta_path.is_file():
-        return {}
-
-    try:
-        with meta_path.open("r", encoding="utf-8") as handle:
-            meta = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-    return meta if isinstance(meta, dict) else {}
-
-
-def write_meta(target_dir: Path, meta: dict[str, object]) -> Path:
-    meta_path = meta_json_path(target_dir)
-    with meta_path.open("w", encoding="utf-8") as handle:
-        json.dump(meta, handle, indent=2, ensure_ascii=False)
-        handle.write("\n")
-
-    return meta_path
 
 
 def read_transactions(csv_path: Path) -> tuple[list[str], list[list[str]]]:
@@ -240,9 +213,7 @@ def main() -> None:
         created_paths.append(pdf_path)
 
     if created_paths:
-        meta = read_meta(target_dir)
-        meta["transaction_filename"] = created_paths[0].name
-        write_meta(target_dir, meta)
+        set_meta_value(target_dir, "transaction_filename", created_paths[0].name)
 
     for path in created_paths:
         print(path)

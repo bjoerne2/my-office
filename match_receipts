@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import json
 import os
 import re
 import shutil
@@ -13,6 +12,7 @@ from datetime import datetime, date
 from pathlib import Path
 
 from python.args import validate_vendor, validate_year_month
+from python.meta import set_meta_value
 from python.vendors import VendorRule, get_vendor_rule
 
 
@@ -155,19 +155,6 @@ def copy_unique_pdfs(target_dir: Path, pdfs: list[Path]) -> list[Path]:
     return copied_paths
 
 
-def write_meta_file(target_dir: Path, billing_pdf: Path) -> Path:
-    meta_path = target_dir / "meta.json"
-    meta_content = {
-        "billing_filename": billing_pdf.name,
-    }
-
-    with meta_path.open("w", encoding="utf-8") as handle:
-        json.dump(meta_content, handle, indent=2, ensure_ascii=False)
-        handle.write("\n")
-
-    return meta_path
-
-
 def main() -> None:
     ensure_project_venv()
 
@@ -195,7 +182,7 @@ def main() -> None:
         candidates = collect_candidates(pdf_dir, vendor)
         matched_pdfs = [choose_best_candidate(transaction_date, candidates).path for transaction_date in transaction_dates]
         copied_paths = copy_unique_pdfs(target_dir, matched_pdfs)
-        meta_path = write_meta_file(target_dir, copied_paths[0])
+        meta_path = set_meta_value(target_dir, "billing_filename", copied_paths[0].name)
     except RuntimeError as exc:
         print(f"Fehler: {exc}")
         sys.exit(1)

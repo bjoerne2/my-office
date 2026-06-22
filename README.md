@@ -23,6 +23,7 @@ Wiederverwendbare Python-Helfer liegen unter `python/`, z. B.:
 
 - `python/args.py` für Argument-Validierung
 - `python/vendors.py` für Anbieter-/Namenszuordnungen
+- `python/meta.py` für zentrales Lesen/Schreiben von `meta.json`
 
 ## Python Installation (Homebrew)
 
