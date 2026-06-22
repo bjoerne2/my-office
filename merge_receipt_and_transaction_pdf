@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -59,44 +60,37 @@ def staging_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> P
     return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name
 
 
-def find_transaction_pdf(target_dir: Path) -> Path:
-    candidates = sorted(target_dir.glob("transaction-*.pdf"))
-
-    if not candidates:
-        raise RuntimeError(f"Kein Kontobeleg-PDF gefunden in: {target_dir}")
-
-    if len(candidates) > 1:
-        raise RuntimeError(
-            "Mehr als ein Kontobeleg-PDF gefunden. Erwartet wurde genau eines: "
-            + ", ".join(path.name for path in candidates)
-        )
-
-    return candidates[0]
+def meta_json_path(target_dir: Path) -> Path:
+    return target_dir / "meta.json"
 
 
-def find_receipt_pdf(target_dir: Path, vendor: VendorRule) -> Path:
-    excluded_names = {OUTPUT_FILENAME}
-    candidates = sorted(
-        path
-        for path in target_dir.glob("*.pdf")
-        if path.name not in excluded_names and not path.name.startswith("transaction-")
-    )
+def read_meta(target_dir: Path) -> dict[str, object]:
+    meta_path = meta_json_path(target_dir)
+    if not meta_path.is_file():
+        raise RuntimeError(f"meta.json nicht gefunden: {meta_path}")
 
-    if vendor.pdf_prefix:
-        prefixed_candidates = [path for path in candidates if path.name.lower().startswith(vendor.pdf_prefix.lower())]
-        if prefixed_candidates:
-            candidates = prefixed_candidates
+    try:
+        with meta_path.open("r", encoding="utf-8") as handle:
+            meta = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"meta.json konnte nicht gelesen werden: {meta_path}") from exc
 
-    if not candidates:
-        raise RuntimeError(f"Kein Rechnungs-PDF gefunden in: {target_dir}")
+    if not isinstance(meta, dict):
+        raise RuntimeError(f"meta.json hat kein gültiges Objektformat: {meta_path}")
 
-    if len(candidates) > 1:
-        raise RuntimeError(
-            "Mehr als ein Rechnungs-PDF gefunden. Erwartet wurde genau eines: "
-            + ", ".join(path.name for path in candidates)
-        )
+    return meta
 
-    return candidates[0]
+
+def resolve_pdf_from_meta(target_dir: Path, meta: dict[str, object], key: str, label: str) -> Path:
+    filename = meta.get(key)
+    if not isinstance(filename, str) or not filename.strip():
+        raise RuntimeError(f"{key} fehlt in meta.json")
+
+    pdf_path = target_dir / filename.strip()
+    if not pdf_path.is_file():
+        raise RuntimeError(f"{label} nicht gefunden: {pdf_path}")
+
+    return pdf_path
 
 
 def merge_pdfs(receipt_pdf: Path, transaction_pdf: Path, output_pdf: Path) -> None:
@@ -126,8 +120,9 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        receipt_pdf = find_receipt_pdf(target_dir, vendor)
-        transaction_pdf = find_transaction_pdf(target_dir)
+        meta = read_meta(target_dir)
+        receipt_pdf = resolve_pdf_from_meta(target_dir, meta, "billing_filename", "Rechnungs-PDF")
+        transaction_pdf = resolve_pdf_from_meta(target_dir, meta, "transaction_filename", "Kontobeleg-PDF")
         output_pdf = target_dir / OUTPUT_FILENAME
         merge_pdfs(receipt_pdf, transaction_pdf, output_pdf)
     except RuntimeError as exc:
