@@ -91,8 +91,9 @@ Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
 ./match_receipts 2026 01 github
 ```
 
-Die passenden PDFs werden aus `tmp/app_scripts_data/GitHub/` gelesen, direkt nach `tmp/staging/2026/01/GitHub/` kopiert
-und als Eintragsliste in `meta.json` abgelegt.
+Die passenden PDFs werden anbieterspezifisch gematcht, direkt in den Staging-Ordner kopiert
+und als Eintragsliste in `meta.json` abgelegt. Für GitHub erfolgt das Matching über den Dateinamen,
+für AWS über Betrag und Inhalte der PDF-Dateien.
 
 ### MoneyMoney Transaktions-PDF erzeugen
 

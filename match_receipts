@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from datetime import datetime, date
 from pathlib import Path
 
@@ -17,12 +18,26 @@ from python.vendors import VendorRule, get_vendor_rule
 
 
 DATE_PATTERN = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+AWS_INVOICE_DATE_PATTERN = re.compile(r"(?:VAT\s+)?Invoice Date:\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})")
+AWS_TOTAL_AMOUNT_PATTERN = re.compile(r"TOTAL AMOUNT\s+EUR\s+([0-9][0-9.,]*)")
+DATE_FIELD_LABELS = ("Buchungstag", "Datum")
+AMOUNT_FIELD_LABELS = ("Betrag",)
+ISSUER_FIELD_LABELS = ("Name", "Auftraggeber/Empfänger")
+
+
+@dataclass(frozen=True)
+class TransactionRecord:
+    booking_date: date
+    issuer_name: str
+    amount: Decimal
 
 
 @dataclass(frozen=True)
 class PdfCandidate:
     path: Path
     receipt_date: date
+    total_amount: Decimal | None = None
+    kind: str | None = None
 
 
 def ensure_project_venv() -> None:
@@ -34,7 +49,7 @@ def ensure_project_venv() -> None:
     if not venv_python.is_file():
         return
 
-    if Path(sys.executable).resolve() == venv_python.resolve():
+    if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
         return
 
     os.execv(str(venv_python), [str(venv_python), *sys.argv])
@@ -69,6 +84,22 @@ def parse_ddmmyyyy(value: str) -> date:
     return datetime.strptime(value.strip(), "%d.%m.%Y").date()
 
 
+def parse_invoice_date(value: str) -> date:
+    return datetime.strptime(value.strip(), "%B %d, %Y").date()
+
+
+def parse_eur_amount(value: str) -> Decimal:
+    normalized = value.strip()
+    if "." in normalized and "," in normalized:
+        normalized = normalized.replace(".", "").replace(",", ".")
+    elif "," in normalized:
+        normalized = normalized.replace(",", ".")
+    try:
+        return abs(Decimal(normalized))
+    except InvalidOperation as exc:
+        raise RuntimeError(f"Ungültiger Betrag: {value}") from exc
+
+
 def parse_pdf_date(filename: str) -> date | None:
     match = DATE_PATTERN.search(filename)
     if not match:
@@ -78,7 +109,18 @@ def parse_pdf_date(filename: str) -> date | None:
     return date(year, month, day)
 
 
-def read_transaction_dates(csv_path: Path) -> list[date]:
+def find_column_index(header: list[str], supported_labels: tuple[str, ...]) -> int:
+    for label in supported_labels:
+        try:
+            return header.index(label)
+        except ValueError:
+            continue
+
+    supported = ", ".join(supported_labels)
+    raise RuntimeError(f"CSV-Spalte nicht gefunden ({supported}) in {header}")
+
+
+def read_transaction_records(csv_path: Path) -> list[TransactionRecord]:
     with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.reader(handle, delimiter=";")
 
@@ -87,26 +129,31 @@ def read_transaction_dates(csv_path: Path) -> list[date]:
         except StopIteration as exc:
             raise RuntimeError(f"Leere CSV-Datei: {csv_path}") from exc
 
-        try:
-            booking_date_index = header.index("Buchungstag")
-        except ValueError:
-            booking_date_index = 0
+        booking_date_index = find_column_index(header, DATE_FIELD_LABELS)
+        amount_index = find_column_index(header, AMOUNT_FIELD_LABELS)
+        issuer_index = find_column_index(header, ISSUER_FIELD_LABELS)
 
-        dates: list[date] = []
+        records: list[TransactionRecord] = []
         for row in reader:
             if not row or not any(cell.strip() for cell in row):
                 continue
-            if booking_date_index >= len(row):
-                raise RuntimeError(f"CSV-Zeile ohne Buchungstag: {row}")
-            dates.append(parse_ddmmyyyy(row[booking_date_index]))
+            if max(booking_date_index, amount_index, issuer_index) >= len(row):
+                raise RuntimeError(f"CSV-Zeile unvollständig: {row}")
+            records.append(
+                TransactionRecord(
+                    booking_date=parse_ddmmyyyy(row[booking_date_index]),
+                    issuer_name=row[issuer_index].strip(),
+                    amount=parse_eur_amount(row[amount_index]),
+                )
+            )
 
-    if not dates:
+    if not records:
         raise RuntimeError(f"Keine Transaktionen in {csv_path} gefunden")
 
-    return dates
+    return records
 
 
-def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
+def collect_default_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
     candidates: list[PdfCandidate] = []
 
     for path in sorted(pdf_dir.glob("*.pdf")):
@@ -125,7 +172,48 @@ def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
     return candidates
 
 
-def choose_best_candidate(transaction_date: date, candidates: list[PdfCandidate]) -> PdfCandidate:
+def extract_aws_candidate(path: Path) -> PdfCandidate | None:
+    from pypdf import PdfReader
+
+    text = " ".join((page.extract_text() or "") for page in PdfReader(str(path)).pages[:2])
+    normalized_text = " ".join(text.split())
+
+    amount_match = AWS_TOTAL_AMOUNT_PATTERN.search(normalized_text)
+    date_match = AWS_INVOICE_DATE_PATTERN.search(normalized_text)
+    if amount_match is None or date_match is None:
+        return None
+
+    kind = "marketplace" if path.name.upper().startswith("EUMP") else "service"
+    return PdfCandidate(
+        path=path,
+        receipt_date=parse_invoice_date(date_match.group(1)),
+        total_amount=parse_eur_amount(amount_match.group(1)),
+        kind=kind,
+    )
+
+
+def collect_aws_candidates(pdf_dir: Path) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        candidate = extract_aws_candidate(path)
+        if candidate is not None:
+            candidates.append(candidate)
+
+    if not candidates:
+        raise RuntimeError(f"Keine AWS-PDF-Kandidaten in {pdf_dir} gefunden")
+
+    return candidates
+
+
+def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
+    if vendor.slug == "aws":
+        return collect_aws_candidates(pdf_dir)
+
+    return collect_default_candidates(pdf_dir, vendor)
+
+
+def choose_best_candidate_by_date(transaction_date: date, candidates: list[PdfCandidate]) -> PdfCandidate:
     monthly_candidates = [
         candidate
         for candidate in candidates
@@ -141,6 +229,48 @@ def choose_best_candidate(transaction_date: date, candidates: list[PdfCandidate]
         monthly_candidates,
         key=lambda candidate: abs((candidate.receipt_date - transaction_date).days),
     )
+
+
+def aws_transaction_kind(record: TransactionRecord) -> str | None:
+    normalized_issuer = record.issuer_name.strip().lower()
+    if "amazon payments europe" in normalized_issuer:
+        return "marketplace"
+    if "amazon web services emea" in normalized_issuer:
+        return "service"
+    return None
+
+
+def choose_best_aws_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
+    expected_kind = aws_transaction_kind(record)
+    matching_candidates = [candidate for candidate in candidates if candidate.total_amount == record.amount]
+
+    if expected_kind is not None:
+        matching_candidates = [candidate for candidate in matching_candidates if candidate.kind == expected_kind]
+
+    if not matching_candidates:
+        raise RuntimeError(
+            "Kein AWS-PDF für "
+            f"{record.booking_date.strftime('%Y-%m-%d')} "
+            f"mit Betrag {record.amount} und Rechnungssteller {record.issuer_name} gefunden"
+        )
+
+    return min(
+        matching_candidates,
+        key=lambda candidate: abs((candidate.receipt_date - record.booking_date).days),
+    )
+
+
+def match_pdfs_to_transactions(vendor: VendorRule, records: list[TransactionRecord], candidates: list[PdfCandidate]) -> list[Path]:
+    if vendor.slug == "aws":
+        remaining_candidates = list(candidates)
+        matched_paths: list[Path] = []
+        for record in records:
+            candidate = choose_best_aws_candidate(record, remaining_candidates)
+            remaining_candidates.remove(candidate)
+            matched_paths.append(candidate.path)
+        return matched_paths
+
+    return [choose_best_candidate_by_date(record.booking_date, candidates).path for record in records]
 
 
 def copy_unique_pdfs(target_dir: Path, pdfs: list[Path]) -> list[Path]:
@@ -178,9 +308,9 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        transaction_dates = read_transaction_dates(csv_path)
+        transaction_records = read_transaction_records(csv_path)
         candidates = collect_candidates(pdf_dir, vendor)
-        matched_pdfs = [choose_best_candidate(transaction_date, candidates).path for transaction_date in transaction_dates]
+        matched_pdfs = match_pdfs_to_transactions(vendor, transaction_records, candidates)
         meta_entries = [{"billing_filename": matched_pdf.name} for matched_pdf in matched_pdfs]
         copied_paths = copy_unique_pdfs(target_dir, matched_pdfs)
         meta_path = write_meta_entries(target_dir, meta_entries)
