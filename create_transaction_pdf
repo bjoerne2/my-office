@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -14,6 +15,17 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from vendors import VendorRule, get_vendor_rule
+
+
+PURPOSE_FIELD_LABELS = {
+    "Umsatzart": "Umsatzart",
+    "Referenz": "Referenznummer",
+    "Mandat": "Mandatsnummer",
+    "Gläubiger-ID": "Gläubiger-ID",
+}
+
+PURPOSE_FIELD_PATTERN = re.compile(r",\s*(Umsatzart|Referenz|Mandat|Gläubiger-ID):\s*")
+DATE_FIELD_LABELS = ("Datum", "Buchungstag")
 
 
 def ensure_project_venv() -> None:
@@ -79,23 +91,59 @@ def read_transactions(csv_path: Path) -> tuple[list[str], list[list[str]]]:
     return header, rows
 
 
-def sanitize_filename_part(value: str) -> str:
-    sanitized = "".join(character if character.isalnum() else "-" for character in value.strip())
-    sanitized = "-".join(part for part in sanitized.split("-") if part)
-    return sanitized.lower() or "transaction"
+def find_first_column_value(header: list[str], row: list[str], supported_labels: tuple[str, ...]) -> str:
+    for label in supported_labels:
+        if label in header:
+            column_index = header.index(label)
+            if column_index < len(row):
+                return row[column_index].strip()
+
+    return row[0].strip() if row else ""
 
 
-def transaction_pdf_path(target_dir: Path, row: list[str], index: int) -> Path:
-    booking_date = row[0].strip() if row else ""
+def transaction_pdf_path(header: list[str], target_dir: Path, row: list[str], index: int) -> Path:
+    booking_date = find_first_column_value(header, row, DATE_FIELD_LABELS)
     booking_date_slug = booking_date.replace(".", "-") if booking_date else f"row-{index:03d}"
     filename = f"transaction-{booking_date_slug}-{index:03d}.pdf"
     return target_dir / filename
 
 
+def parse_purpose_details(purpose: str) -> tuple[str, dict[str, str]]:
+    normalized_purpose = purpose.strip()
+    matches = list(PURPOSE_FIELD_PATTERN.finditer(normalized_purpose))
+
+    if not matches:
+        return normalized_purpose, {}
+
+    description = normalized_purpose[: matches[0].start()].strip(" ,")
+    parsed_fields: dict[str, str] = {}
+
+    for index, match in enumerate(matches):
+        source_label = match.group(1)
+        value_start = match.end()
+        value_end = matches[index + 1].start() if index + 1 < len(matches) else len(normalized_purpose)
+        value = normalized_purpose[value_start:value_end].strip(" ,")
+        target_label = PURPOSE_FIELD_LABELS[source_label]
+        parsed_fields[target_label] = value
+
+    return description, parsed_fields
+
+
 def build_table_data(header: list[str], row: list[str]) -> list[list[str]]:
     pairs: list[list[str]] = []
     for key, value in zip(header, row):
-        pairs.append([key, value or ""])
+        if key == "Verwendungszweck":
+            description, parsed_fields = parse_purpose_details(value or "")
+
+            if description and description != (value or ""):
+                pairs.append(["Verwendungszweck", description])
+
+            for label in ("Umsatzart", "Referenznummer", "Mandatsnummer", "Gläubiger-ID"):
+                if label in parsed_fields:
+                    pairs.append([label, parsed_fields[label]])
+        else:
+            pairs.append([key, value or ""])
+
     return pairs
 
 
@@ -166,7 +214,7 @@ def main() -> None:
 
     created_paths: list[Path] = []
     for index, row in enumerate(rows, start=1):
-        pdf_path = transaction_pdf_path(target_dir, row, index)
+        pdf_path = transaction_pdf_path(header, target_dir, row, index)
         write_transaction_pdf(pdf_path, vendor, header, row, index)
         created_paths.append(pdf_path)
 
