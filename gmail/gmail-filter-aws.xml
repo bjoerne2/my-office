@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>
+  <title>Mail Filters</title>
+  <id>tag:mail.google.com,2008:filters:</id>
+  <updated>2026-01-01T00:00:00Z</updated>
+
+  <entry>
+    <category term='filter'></category>
+    <title>Mail Filter</title>
+    <id>tag:mail.google.com,2008:filter:aws-bookkeeping</id>
+
+    <apps:property name='from' value='invoicing@aws.com|no-reply@tax-and-invoicing.us-east-1.amazonaws.com'/>
+    <apps:property name='hasTheWord' value='has:attachment'/>
+    <apps:property name='label' value='Buchführung/AWS'/>
+    <apps:property name='shouldArchive' value='false'/>
+  </entry>
+</feed>
