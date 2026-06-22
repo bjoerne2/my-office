@@ -9,6 +9,7 @@ Aktuell enthalten:
 - `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data` und kopiert sie direkt in den Staging-Monatsordner.
 - `create_transaction_pdf`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
+- `merge_receipt_and_transaction_pdf`: Führt Rechnungs-PDF und Kontobeleg-PDF zu `beleg_und_buchung.pdf` zusammen.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
@@ -91,6 +92,15 @@ Die passenden PDFs werden direkt nach `tmp/staging/2026/01/GitHub/` kopiert.
 
 Das Skript liest `tmp/staging/2026/01/GitHub/transactions.csv` und erzeugt pro Zeile ein PDF mit einer einfachen
 Schlüssel/Wert-Tabelle direkt in `tmp/staging/2026/01/GitHub/`.
+
+### Rechnung und Buchung zusammenführen
+
+```bash
+./merge_receipt_and_transaction_pdf 2026 01 github
+```
+
+Das Skript führt das Rechnungs-PDF und das erzeugte Kontobeleg-PDF im Ordner
+`tmp/staging/2026/01/GitHub/` zu `beleg_und_buchung.pdf` zusammen.
 
 ## rclone / Google Drive Sync
 

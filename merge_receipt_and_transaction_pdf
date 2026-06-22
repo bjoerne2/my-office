@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+ensure_project_venv()
+
+from pypdf import PdfWriter
+
+from vendors import VendorRule, get_vendor_rule
+
+
+OUTPUT_FILENAME = "beleg_und_buchung.pdf"
+
+
+def usage() -> str:
+    return "Usage: merge_receipt_and_transaction_pdf <year> <month> <rechnungssteller>"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
+    if len(argv) != 3:
+        raise ValueError(usage())
+
+    try:
+        year = int(argv[0])
+        month = int(argv[1])
+    except ValueError as exc:
+        raise ValueError("Jahr und Monat müssen numerisch sein, z.B. 2026 01") from exc
+
+    if year < 1900 or year > 9999:
+        raise ValueError(f"Ungültiges Jahr: {year}")
+
+    if month < 1 or month > 12:
+        raise ValueError(f"Ungültiger Monat: {month}")
+
+    return year, month, get_vendor_rule(argv[2])
+
+
+def staging_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
+    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name
+
+
+def find_transaction_pdf(target_dir: Path) -> Path:
+    candidates = sorted(target_dir.glob("transaction-*.pdf"))
+
+    if not candidates:
+        raise RuntimeError(f"Kein Kontobeleg-PDF gefunden in: {target_dir}")
+
+    if len(candidates) > 1:
+        raise RuntimeError(
+            "Mehr als ein Kontobeleg-PDF gefunden. Erwartet wurde genau eines: "
+            + ", ".join(path.name for path in candidates)
+        )
+
+    return candidates[0]
+
+
+def find_receipt_pdf(target_dir: Path, vendor: VendorRule) -> Path:
+    excluded_names = {OUTPUT_FILENAME}
+    candidates = sorted(
+        path
+        for path in target_dir.glob("*.pdf")
+        if path.name not in excluded_names and not path.name.startswith("transaction-")
+    )
+
+    if vendor.pdf_prefix:
+        prefixed_candidates = [path for path in candidates if path.name.lower().startswith(vendor.pdf_prefix.lower())]
+        if prefixed_candidates:
+            candidates = prefixed_candidates
+
+    if not candidates:
+        raise RuntimeError(f"Kein Rechnungs-PDF gefunden in: {target_dir}")
+
+    if len(candidates) > 1:
+        raise RuntimeError(
+            "Mehr als ein Rechnungs-PDF gefunden. Erwartet wurde genau eines: "
+            + ", ".join(path.name for path in candidates)
+        )
+
+    return candidates[0]
+
+
+def merge_pdfs(receipt_pdf: Path, transaction_pdf: Path, output_pdf: Path) -> None:
+    writer = PdfWriter()
+
+    for source_path in (receipt_pdf, transaction_pdf):
+        writer.append(str(source_path))
+
+    with output_pdf.open("wb") as handle:
+        writer.write(handle)
+
+    writer.close()
+
+
+def main() -> None:
+    try:
+        year, month, vendor = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent
+    target_dir = staging_dir(repo_root, year, month, vendor)
+
+    if not target_dir.is_dir():
+        print(f"Staging-Ordner nicht gefunden: {target_dir}")
+        sys.exit(1)
+
+    try:
+        receipt_pdf = find_receipt_pdf(target_dir, vendor)
+        transaction_pdf = find_transaction_pdf(target_dir)
+        output_pdf = target_dir / OUTPUT_FILENAME
+        merge_pdfs(receipt_pdf, transaction_pdf, output_pdf)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    print(output_pdf)
+
+
+if __name__ == "__main__":
+    main()
+
