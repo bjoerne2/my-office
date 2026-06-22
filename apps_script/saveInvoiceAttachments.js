@@ -25,9 +25,14 @@ function saveInvoiceAttachments() {
           "', Content-Type='" + contentType + "'"
         );
         if (isPdfAttachment) {
-          folder.createFile(att);
-          savedCount += 1;
-          Logger.log("Gespeichert: " + fileName);
+          const existingFiles = folder.getFilesByName(fileName);
+          if (existingFiles.hasNext()) {
+            Logger.log("Übersprungen, Datei existiert bereits in Drive: " + fileName);
+          } else {
+            folder.createFile(att);
+            savedCount += 1;
+            Logger.log("Gespeichert: " + fileName);
+          }
         }
       });
     });
