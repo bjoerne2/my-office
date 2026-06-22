@@ -15,10 +15,19 @@ function saveInvoiceAttachments() {
       );
       const attachments = message.getAttachments();
       attachments.forEach(att => {
-        if (att.getContentType() === "application/pdf") {
+        const contentType = att.getContentType();
+        const fileName = att.getName();
+        const isPdfAttachment = contentType === "application/pdf" ||
+          (contentType === "application/octet-stream" && fileName.toLowerCase().endsWith(".pdf"));
+
+        Logger.log(
+          "Attachment gefunden: Name='" + fileName +
+          "', Content-Type='" + contentType + "'"
+        );
+        if (isPdfAttachment) {
           folder.createFile(att);
           savedCount += 1;
-          Logger.log("Gespeichert: " + att.getName());
+          Logger.log("Gespeichert: " + fileName);
         }
       });
     });
