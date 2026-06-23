@@ -10,7 +10,7 @@
     <id>tag:mail.google.com,2008:filter:aws-bookkeeping</id>
 
     <apps:property name='from' value='invoicing@aws.com|no-reply@tax-and-invoicing.us-east-1.amazonaws.com'/>
-    <apps:property name='hasTheWord' value='has:attachment'/>
+    <apps:property name='hasTheWord' value='has:attachment filename:pdf'/>
     <apps:property name='label' value='Buchführung/AWS'/>
     <apps:property name='shouldArchive' value='false'/>
   </entry>
@@ -22,7 +22,7 @@
 
     <apps:property name='from' value='noreply@github.com'/>
     <apps:property name='subject' value='Payment Receipt'/>
-    <apps:property name='hasTheWord' value='has:attachment'/>
+    <apps:property name='hasTheWord' value='has:attachment filename:pdf'/>
     <apps:property name='label' value='Buchführung/GitHub'/>
     <apps:property name='shouldArchive' value='false'/>
   </entry>
@@ -35,6 +35,16 @@
     <apps:property name='from' value='payments-noreply@google.com'/>
     <apps:property name='hasTheWord' value='&quot;Google Payments&quot; has:attachment filename:pdf'/>
     <apps:property name='label' value='Buchführung/Google'/>
+    <apps:property name='shouldArchive' value='false'/>
+  </entry>
+
+  <entry>
+    <category term='filter'></category>
+    <title>Mail Filter</title>
+    <id>tag:mail.google.com,2008:filter:hosting-bookkeeping</id>
+
+    <apps:property name='from' value='accounting@hosting.de'/>
+    <apps:property name='label' value='Buchführung/hosting.de'/>
     <apps:property name='shouldArchive' value='false'/>
   </entry>
 </feed>
