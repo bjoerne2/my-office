@@ -20,9 +20,40 @@ from python.vendors import VendorRule, get_vendor_rule
 DATE_PATTERN = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 AWS_INVOICE_DATE_PATTERN = re.compile(r"(?:VAT\s+)?Invoice Date:\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})")
 AWS_TOTAL_AMOUNT_PATTERN = re.compile(r"TOTAL AMOUNT\s+EUR\s+([0-9][0-9.,]*)")
+GOOGLE_TOTAL_AMOUNT_PATTERN = re.compile(r"Gesamtsumme in EUR\s*([0-9][0-9.,]*)\s*€", re.IGNORECASE)
+GERMAN_DATE_PATTERN = re.compile(r"([0-9]{1,2})\.\s*([A-Za-zÄÖÜäöü]{3,10})\.?\s*([0-9]{4})")
 DATE_FIELD_LABELS = ("Buchungstag", "Datum")
 AMOUNT_FIELD_LABELS = ("Betrag",)
 ISSUER_FIELD_LABELS = ("Name", "Auftraggeber/Empfänger")
+
+GERMAN_MONTHS = {
+    "jan": 1,
+    "januar": 1,
+    "feb": 2,
+    "februar": 2,
+    "mae": 3,
+    "maerz": 3,
+    "mrz": 3,
+    "marz": 3,
+    "apr": 4,
+    "april": 4,
+    "mai": 5,
+    "jun": 6,
+    "juni": 6,
+    "jul": 7,
+    "juli": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "okt": 10,
+    "oktober": 10,
+    "nov": 11,
+    "november": 11,
+    "dez": 12,
+    "dezember": 12,
+}
 
 
 @dataclass(frozen=True)
@@ -86,6 +117,16 @@ def parse_ddmmyyyy(value: str) -> date:
 
 def parse_invoice_date(value: str) -> date:
     return datetime.strptime(value.strip(), "%B %d, %Y").date()
+
+
+def parse_german_date(day: str, month_token: str, year: str) -> date:
+    normalized_month = month_token.strip().lower().replace(".", "")
+    normalized_month = normalized_month.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue")
+    month = GERMAN_MONTHS.get(normalized_month)
+    if month is None:
+        raise RuntimeError(f"Unbekannter Monatsname: {month_token}")
+
+    return date(int(year), month, int(day))
 
 
 def parse_eur_amount(value: str) -> Decimal:
@@ -172,10 +213,14 @@ def collect_default_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCan
     return candidates
 
 
-def extract_aws_candidate(path: Path) -> PdfCandidate | None:
+def extract_pdf_text(path: Path) -> str:
     from pypdf import PdfReader
 
-    text = " ".join((page.extract_text() or "") for page in PdfReader(str(path)).pages[:2])
+    return " ".join((page.extract_text() or "") for page in PdfReader(str(path)).pages[:2])
+
+
+def extract_aws_candidate(path: Path) -> PdfCandidate | None:
+    text = extract_pdf_text(path)
     normalized_text = " ".join(text.split())
 
     amount_match = AWS_TOTAL_AMOUNT_PATTERN.search(normalized_text)
@@ -206,9 +251,47 @@ def collect_aws_candidates(pdf_dir: Path) -> list[PdfCandidate]:
     return candidates
 
 
+def extract_google_candidate(path: Path) -> PdfCandidate | None:
+    text = extract_pdf_text(path)
+    normalized_text = " ".join(text.split())
+
+    amount_match = GOOGLE_TOTAL_AMOUNT_PATTERN.search(normalized_text)
+    if amount_match is None:
+        return None
+
+    date_matches = GERMAN_DATE_PATTERN.findall(normalized_text)
+    if not date_matches:
+        return None
+
+    parsed_dates = [parse_german_date(day, month, year) for day, month, year in date_matches]
+    receipt_date = max(parsed_dates)
+
+    return PdfCandidate(
+        path=path,
+        receipt_date=receipt_date,
+        total_amount=parse_eur_amount(amount_match.group(1)),
+    )
+
+
+def collect_google_candidates(pdf_dir: Path) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        candidate = extract_google_candidate(path)
+        if candidate is not None:
+            candidates.append(candidate)
+
+    if not candidates:
+        raise RuntimeError(f"Keine Google-PDF-Kandidaten in {pdf_dir} gefunden")
+
+    return candidates
+
+
 def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
     if vendor.slug == "aws":
         return collect_aws_candidates(pdf_dir)
+    if vendor.slug == "google":
+        return collect_google_candidates(pdf_dir)
 
     return collect_default_candidates(pdf_dir, vendor)
 
@@ -260,12 +343,37 @@ def choose_best_aws_candidate(record: TransactionRecord, candidates: list[PdfCan
     )
 
 
+def choose_best_google_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
+    matching_candidates = [candidate for candidate in candidates if candidate.total_amount == record.amount]
+
+    if not matching_candidates:
+        raise RuntimeError(
+            "Kein Google-PDF für "
+            f"{record.booking_date.strftime('%Y-%m-%d')} "
+            f"mit Betrag {record.amount} gefunden"
+        )
+
+    return min(
+        matching_candidates,
+        key=lambda candidate: abs((candidate.receipt_date - record.booking_date).days),
+    )
+
+
 def match_pdfs_to_transactions(vendor: VendorRule, records: list[TransactionRecord], candidates: list[PdfCandidate]) -> list[Path]:
     if vendor.slug == "aws":
         remaining_candidates = list(candidates)
         matched_paths: list[Path] = []
         for record in records:
             candidate = choose_best_aws_candidate(record, remaining_candidates)
+            remaining_candidates.remove(candidate)
+            matched_paths.append(candidate.path)
+        return matched_paths
+
+    if vendor.slug == "google":
+        remaining_candidates = list(candidates)
+        matched_paths: list[Path] = []
+        for record in records:
+            candidate = choose_best_google_candidate(record, remaining_candidates)
             remaining_candidates.remove(candidate)
             matched_paths.append(candidate.path)
         return matched_paths
