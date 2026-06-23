@@ -26,4 +26,15 @@
     <apps:property name='label' value='Buchführung/GitHub'/>
     <apps:property name='shouldArchive' value='false'/>
   </entry>
+
+  <entry>
+    <category term='filter'></category>
+    <title>Mail Filter</title>
+    <id>tag:mail.google.com,2008:filter:google-bookkeeping</id>
+
+    <apps:property name='from' value='payments-noreply@google.com'/>
+    <apps:property name='hasTheWord' value='&quot;Google Payments&quot; has:attachment filename:pdf'/>
+    <apps:property name='label' value='Buchführung/Google'/>
+    <apps:property name='shouldArchive' value='false'/>
+  </entry>
 </feed>

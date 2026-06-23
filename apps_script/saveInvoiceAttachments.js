@@ -5,7 +5,8 @@ function saveInvoiceAttachments() {
   const doneLabel = GmailApp.getUserLabelByName("Done") || GmailApp.createLabel("Done");
   const labelConfigs = [
     { gmailLabel: "Buchführung/AWS", driveFolderName: "AWS" },
-    { gmailLabel: "Buchführung/GitHub", driveFolderName: "GitHub" }
+    { gmailLabel: "Buchführung/GitHub", driveFolderName: "GitHub" },
+    { gmailLabel: "Buchführung/Google", driveFolderName: "Google" }
   ];
 
   labelConfigs.forEach(config => {
