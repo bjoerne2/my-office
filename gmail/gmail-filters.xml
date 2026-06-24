@@ -47,4 +47,15 @@
     <apps:property name='label' value='Buchführung/hosting.de'/>
     <apps:property name='shouldArchive' value='false'/>
   </entry>
+
+  <entry>
+    <category term='filter'></category>
+    <title>Mail Filter</title>
+    <id>tag:mail.google.com,2008:filter:moritz-bookkeeping</id>
+
+    <apps:property name='from' value='m-hoeppner@gmx.net'/>
+    <apps:property name='hasTheWord' value='has:attachment filename:pdf'/>
+    <apps:property name='label' value='Buchführung/Moritz'/>
+    <apps:property name='shouldArchive' value='false'/>
+  </entry>
 </feed>

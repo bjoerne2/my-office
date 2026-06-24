@@ -7,7 +7,8 @@ function saveInvoiceAttachments() {
     { gmailLabel: "Buchführung/AWS", driveFolderName: "AWS" },
     { gmailLabel: "Buchführung/GitHub", driveFolderName: "GitHub" },
     { gmailLabel: "Buchführung/Google", driveFolderName: "Google" },
-    { gmailLabel: "Buchführung/hosting.de", driveFolderName: "hosting.de" }
+    { gmailLabel: "Buchführung/hosting.de", driveFolderName: "hosting.de" },
+    { gmailLabel: "Buchführung/Moritz", driveFolderName: "Moritz" }
   ];
 
   labelConfigs.forEach(config => {

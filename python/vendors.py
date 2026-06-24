@@ -22,6 +22,11 @@ VENDOR_RULES: dict[str, VendorRule] = {
         directory_name="hosting.de",
         match_terms=("hosting.de gmbh",),
     ),
+    "moritz": VendorRule(
+        slug="moritz",
+        directory_name="Moritz",
+        match_terms=("moritz hoeppner",),
+    ),
     "google": VendorRule(
         slug="google",
         directory_name="Google",
