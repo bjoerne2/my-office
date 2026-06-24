@@ -156,17 +156,10 @@ Das Skript führt die in `meta.json` zugeordneten Rechnungs- und Kontobeleg-PDFs
 
 Der Workflow führt nacheinander aus:
 
-1. `export_transactions`
-2. `extract_transactions`
-3. `match_receipts`
-4. `create_transaction_pdfs`
-5. `merge_receipt_and_transaction_pdfs`
-
-Wenn die Exportdatei bereits vorhanden ist und der MoneyMoney-Export übersprungen werden soll:
-
-```bash
-./process_vendor_month 2026 01 github --skip-export
-```
+1. `extract_transactions`
+2. `match_receipts`
+3. `create_transaction_pdfs`
+4. `merge_receipt_and_transaction_pdfs`
 
 ### Gesamt-Workflow für alle Anbieter eines Monats
 
@@ -175,7 +168,7 @@ Wenn die Exportdatei bereits vorhanden ist und der MoneyMoney-Export übersprung
 ```
 
 Das Skript führt zuerst `export_transactions` genau einmal aus und ruft anschließend
-`process_vendor_month <jahr> <monat> <anbieter> --skip-export` für alle bekannten Anbieter auf.
+`process_vendor_month <jahr> <monat> <anbieter>` für alle bekannten Anbieter auf.
 Anbieter ohne passende Monatsbuchungen werden übersprungen.
 
 Wenn die Exportdateien bereits vorhanden sind und kein neuer MoneyMoney-Export erfolgen soll:

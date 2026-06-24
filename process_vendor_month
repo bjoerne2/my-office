@@ -11,15 +11,6 @@ from python.args import validate_vendor, validate_year_month
 from python.vendors import get_vendor_rule
 
 
-SCRIPT_SEQUENCE = (
-    "export_transactions",
-    "extract_transactions",
-    "match_receipts",
-    "create_transaction_pdfs",
-    "merge_receipt_and_transaction_pdfs",
-)
-
-
 def ensure_project_venv() -> None:
     """Automatically use the project venv when available."""
     script_path = Path(__file__).resolve()
@@ -39,24 +30,17 @@ ensure_project_venv()
 
 
 def usage() -> str:
-    return "Usage: process_vendor_month <year> <month> <rechnungssteller> [--skip-export]"
+    return "Usage: process_vendor_month <year> <month> <rechnungssteller>"
 
 
-def parse_args(argv: list[str]) -> tuple[int, int, str, bool]:
-    if len(argv) not in (3, 4):
+def parse_args(argv: list[str]) -> tuple[int, int, str]:
+    if len(argv) != 3:
         raise ValueError(usage())
 
     year, month = validate_year_month(argv[0], argv[1], example="2026 01")
 
     vendor = validate_vendor(argv[2], get_vendor_rule).slug
-    skip_export = False
-
-    if len(argv) == 4:
-        if argv[3] != "--skip-export":
-            raise ValueError(f"Unbekannte Option: {argv[3]}\n{usage()}")
-        skip_export = True
-
-    return year, month, vendor, skip_export
+    return year, month, vendor
 
 
 def run_step(repo_root: Path, script_name: str, args: list[str]) -> None:
@@ -78,7 +62,7 @@ def run_step(repo_root: Path, script_name: str, args: list[str]) -> None:
 
 def main() -> None:
     try:
-        year, month, vendor, skip_export = parse_args(sys.argv[1:])
+        year, month, vendor = parse_args(sys.argv[1:])
     except ValueError as exc:
         print(exc)
         sys.exit(1)
@@ -86,17 +70,12 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parent
     base_args = [f"{year:04d}", f"{month:02d}", vendor]
 
-    steps: list[tuple[str, list[str]]] = []
-    if not skip_export:
-        steps.append(("export_transactions", base_args[:2]))
-    steps.extend(
-        [
-            ("extract_transactions", base_args),
-            ("match_receipts", base_args),
-            ("create_transaction_pdfs", base_args),
-            ("merge_receipt_and_transaction_pdfs", base_args),
-        ]
-    )
+    steps: list[tuple[str, list[str]]] = [
+        ("extract_transactions", base_args),
+        ("match_receipts", base_args),
+        ("create_transaction_pdfs", base_args),
+        ("merge_receipt_and_transaction_pdfs", base_args),
+    ]
 
     try:
         for script_name, args in steps:

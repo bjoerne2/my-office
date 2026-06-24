@@ -86,9 +86,9 @@ def main() -> None:
             run_step(repo_root, "export_transactions", [year_arg, month_arg])
 
         for vendor in list_vendor_rules():
-            print(f"==> process_vendor_month {year_arg} {month_arg} {vendor.slug} --skip-export")
+            print(f"==> process_vendor_month {year_arg} {month_arg} {vendor.slug}")
             try:
-                run_step(repo_root, "process_vendor_month", [year_arg, month_arg, vendor.slug, "--skip-export"])
+                run_step(repo_root, "process_vendor_month", [year_arg, month_arg, vendor.slug])
             except RuntimeError as exc:
                 if is_missing_vendor_transactions_error(str(exc)):
                     print(f"Übersprungen: {vendor.slug} ({exc})")
@@ -101,5 +101,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
