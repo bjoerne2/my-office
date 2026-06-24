@@ -92,13 +92,12 @@ def main() -> None:
         if len(meta_entries) > 1:
             raise RuntimeError(f"meta.json enthält mehr als einen Eintrag: {target / 'meta.json'}")
         meta_entry = dict(meta_entries[0]) if meta_entries else {}
+        meta_entry.pop("account_name", None)
         billing_filename = read_billing_filename(meta_entry)
         account_name = find_optional_column_value(header, row, ACCOUNT_NAME_FIELD_LABELS)
         pdf_path = transaction_pdf_path(header, target, row, 1)
         write_transaction_pdf(pdf_path, header, row, billing_filename=billing_filename, account_name=account_name)
         meta_entry["transaction_filename"] = pdf_path.name
-        if account_name:
-            meta_entry["account_name"] = account_name
         write_meta_entries(target, [meta_entry])
     except RuntimeError as exc:
         print(f"Fehler: {exc}")

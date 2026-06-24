@@ -8,8 +8,6 @@ import sys
 from pathlib import Path
 
 from python.args import validate_year_month
-from python.meta import read_meta_entries, write_meta_entries
-
 ACCOUNT_LABEL_COLUMN = "Kontobezeichnung"
 PERSONAL_TRANSACTIONS_FILENAME = "transactions_personal.csv"
 TARGET_TRANSACTIONS_FILENAME = "transactions.csv"
@@ -135,33 +133,6 @@ def print_matching_rows(header: list[str], rows: list[list[str]]) -> None:
     writer.writerows(rows)
 
 
-def account_name_from_row(row: list[str], header: list[str]) -> str | None:
-    if ACCOUNT_LABEL_COLUMN not in header:
-        return None
-
-    index = header.index(ACCOUNT_LABEL_COLUMN)
-    if index >= len(row):
-        return None
-
-    value = row[index].strip()
-    return value or None
-
-
-def update_meta_if_present(target_dir: Path, existing_row_count: int, account_name: str | None) -> None:
-    meta_entries = read_meta_entries(target_dir)
-    if not meta_entries:
-        return
-
-    if len(meta_entries) != existing_row_count:
-        return
-
-    new_entry: dict[str, str] = {}
-    if account_name:
-        new_entry["account_name"] = account_name
-    meta_entries.append(new_entry)
-    write_meta_entries(target_dir, meta_entries)
-
-
 def main() -> None:
     ensure_project_venv()
 
@@ -217,7 +188,6 @@ def main() -> None:
 
     if normalized_selected_row not in normalized_existing_rows:
         normalized_existing_rows.append(normalized_selected_row)
-        update_meta_if_present(target_dir, len(existing_rows), account_name_from_row(selected_row, source_header))
 
     output_path = write_csv(dst_path, output_header, normalized_existing_rows)
     print(output_path)
