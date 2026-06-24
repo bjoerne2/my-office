@@ -5,8 +5,9 @@ Dieses Repository enthält kleine Office-Automatisierungen.
 Aktuell enthalten:
 
 - `process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
-- `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/staging/<jahr>/<monat>/transactions.csv`.
+- `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSVs nach `tmp/staging/<jahr>/<monat>/transactions.csv` sowie `tmp/staging/<jahr>/<monat>/transactions_personal.csv`.
 - `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
+- `select_personal_transaction`: Wählt genau eine persönliche Buchung aus `transactions_personal.csv` aus und übernimmt sie in einen Zielordner.
 - `ignore_transactions`: Verschiebt fest definierte, bewusst zu ignorierende Monatsumsätze nach `tmp/staging/<jahr>/<monat>/Ignored/transactions.csv`.
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data/<Rechnungssteller>` und kopiert sie direkt in den Staging-Monatsordner.
 - `create_transaction_pdfs`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
@@ -77,6 +78,7 @@ Die Ausgabe (`*_processed.xlsx`) wird im selben Verzeichnis wie die Eingabedatei
 ```
 
 Die Ausgabe wird nach `tmp/staging/2026/05/transactions.csv` verschoben.
+Zusätzlich wird der Export des privaten Kontos `Girokonto` nach `tmp/staging/2026/05/transactions_personal.csv` geschrieben.
 
 ### MoneyMoney Rechnungssteller-Extraktion
 
@@ -85,6 +87,16 @@ Die Ausgabe wird nach `tmp/staging/2026/05/transactions.csv` verschoben.
 ```
 
 Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
+
+### Persönliche Buchung gezielt übernehmen
+
+```bash
+./select_personal_transaction 2026 01 "Inwx GmbH" GitHub
+```
+
+Das Skript sucht in `tmp/staging/2026/01/transactions_personal.csv` nach genau einer Zeile mit dem angegebenen Teilstring
+und übernimmt diese in `tmp/staging/2026/01/<Zielordner>/transactions.csv`. Wenn mehrere Zeilen passen, werden diese als CSV
+ausgegeben und das Skript endet mit einer Fehlermeldung.
 
 ### MoneyMoney Ignorierliste erzeugen
 
@@ -124,6 +136,7 @@ Dabei werden alle Unterordner mit einer `transactions.csv` berücksichtigt, also
 
 Das Skript liest `tmp/staging/2026/01/GitHub/transactions.csv`, erzeugt pro Zeile ein PDF mit einer einfachen
 Schlüssel/Wert-Tabelle direkt in `tmp/staging/2026/01/GitHub/` und ergänzt die zugehörigen Meta-Einträge.
+Wenn in den Umsatzdaten eine Kontobezeichnung vorhanden ist, wird sie zusätzlich in der oberen Tabelle des PDFs angezeigt.
 
 ### Rechnung und Buchung zusammenführen
 

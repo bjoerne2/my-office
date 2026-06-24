@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import calendar
+import csv
 import os
 import shutil
 import subprocess
@@ -31,6 +32,13 @@ def usage() -> str:
     return "Usage: export_transactions <year> <month>"
 
 
+ACCOUNT_EXPORTS = (
+    ("DKB-Business", "transactions.csv"),
+    ("Girokonto", "transactions_personal.csv"),
+)
+ACCOUNT_LABEL_COLUMN = "Kontobezeichnung"
+
+
 def parse_year_month(argv: list[str]) -> tuple[int, int]:
     if len(argv) != 2:
         raise ValueError(usage())
@@ -43,9 +51,9 @@ def month_bounds(year: int, month: int) -> tuple[str, str]:
     return f"{year:04d}-{month:02d}-01", f"{year:04d}-{month:02d}-{last_day:02d}"
 
 
-def run_export(script_path: Path, from_date: str, to_date: str) -> Path:
+def run_export(script_path: Path, account_name: str, from_date: str, to_date: str) -> Path:
     result = subprocess.run(
-        ["osascript", str(script_path), from_date, to_date],
+        ["osascript", str(script_path), account_name, from_date, to_date],
         capture_output=True,
         text=True,
         check=False,
@@ -66,11 +74,43 @@ def run_export(script_path: Path, from_date: str, to_date: str) -> Path:
     return csv_path
 
 
-def move_export(csv_path: Path, repo_root: Path, year: int, month: int) -> Path:
+def with_account_label(csv_path: Path, account_name: str) -> Path:
+    labeled_path = csv_path.with_name(f"{csv_path.stem}-labeled{csv_path.suffix}")
+
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as source_handle:
+        reader = csv.reader(source_handle, delimiter=";")
+        try:
+            header = next(reader)
+        except StopIteration as exc:
+            raise RuntimeError(f"Leere CSV-Datei: {csv_path}") from exc
+
+        if ACCOUNT_LABEL_COLUMN in header:
+            account_column_index = header.index(ACCOUNT_LABEL_COLUMN)
+            output_header = header
+        else:
+            account_column_index = len(header)
+            output_header = [*header, ACCOUNT_LABEL_COLUMN]
+
+        with labeled_path.open("w", encoding="utf-8", newline="") as target_handle:
+            writer = csv.writer(target_handle, delimiter=";", lineterminator="\n")
+            writer.writerow(output_header)
+
+            for row in reader:
+                padded_row = list(row)
+                if len(padded_row) < len(output_header):
+                    padded_row.extend([""] * (len(output_header) - len(padded_row)))
+                padded_row[account_column_index] = account_name
+                writer.writerow(padded_row)
+
+    csv_path.unlink()
+    return labeled_path
+
+
+def move_export(csv_path: Path, repo_root: Path, year: int, month: int, destination_name: str) -> Path:
     destination_dir = repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}"
     destination_dir.mkdir(parents=True, exist_ok=True)
 
-    destination_path = destination_dir / "transactions.csv"
+    destination_path = destination_dir / destination_name
     if destination_path.exists():
         destination_path.unlink()
 
@@ -97,13 +137,17 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        csv_path = run_export(script_path, from_date, to_date)
-        destination_path = move_export(csv_path, repo_root, year, month)
+        destination_paths: list[Path] = []
+        for account_name, destination_name in ACCOUNT_EXPORTS:
+            csv_path = run_export(script_path, account_name, from_date, to_date)
+            labeled_path = with_account_label(csv_path, account_name)
+            destination_paths.append(move_export(labeled_path, repo_root, year, month, destination_name))
     except RuntimeError as exc:
         print(f"Fehler: {exc}")
         sys.exit(1)
 
-    print(destination_path)
+    for destination_path in destination_paths:
+        print(destination_path)
 
 
 if __name__ == "__main__":

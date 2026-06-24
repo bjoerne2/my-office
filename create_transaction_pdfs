@@ -46,6 +46,7 @@ PURPOSE_FIELD_LABELS = {
 
 PURPOSE_FIELD_PATTERN = re.compile(r",\s*(Umsatzart|Referenz|Mandat|Gläubiger-ID):\s*")
 DATE_FIELD_LABELS = ("Datum", "Buchungstag")
+ACCOUNT_NAME_FIELD_LABELS = ("Kontobezeichnung",)
 
 
 def usage() -> str:
@@ -96,6 +97,17 @@ def find_first_column_value(header: list[str], row: list[str], supported_labels:
     return row[0].strip() if row else ""
 
 
+def find_optional_column_value(header: list[str], row: list[str], supported_labels: tuple[str, ...]) -> str | None:
+    for label in supported_labels:
+        if label in header:
+            column_index = header.index(label)
+            if column_index < len(row):
+                value = row[column_index].strip()
+                return value or None
+
+    return None
+
+
 def transaction_pdf_path(header: list[str], target_dir: Path, row: list[str], index: int) -> Path:
     booking_date = find_first_column_value(header, row, DATE_FIELD_LABELS)
     booking_date_slug = booking_date.replace(".", "-") if booking_date else f"row-{index:03d}"
@@ -127,6 +139,8 @@ def parse_purpose_details(purpose: str) -> tuple[str, dict[str, str]]:
 def build_table_data(header: list[str], row: list[str]) -> list[list[str]]:
     pairs: list[list[str]] = []
     for key, value in zip(header, row):
+        if key in ACCOUNT_NAME_FIELD_LABELS:
+            continue
         if key == "Verwendungszweck":
             description, parsed_fields = parse_purpose_details(value or "")
 
@@ -146,6 +160,14 @@ def read_billing_filename(meta_entry: dict[str, str]) -> str | None:
     billing_filename = meta_entry.get("billing_filename")
     if isinstance(billing_filename, str) and billing_filename.strip():
         return billing_filename.strip()
+
+    return None
+
+
+def read_account_name(meta_entry: dict[str, str]) -> str | None:
+    account_name = meta_entry.get("account_name")
+    if isinstance(account_name, str) and account_name.strip():
+        return account_name.strip()
 
     return None
 
@@ -194,6 +216,7 @@ def write_transaction_pdf(
     row: list[str],
     index: int,
     billing_filename: str | None,
+    account_name: str | None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -203,8 +226,14 @@ def write_transaction_pdf(
         Spacer(1, 8 * mm),
     ]
 
+    summary_rows: list[list[str]] = []
     if billing_filename:
-        story.append(make_table([["Rechnung", billing_filename]]))
+        summary_rows.append(["Rechnung", billing_filename])
+    if account_name:
+        summary_rows.append(["Konto", account_name])
+
+    if summary_rows:
+        story.append(make_table(summary_rows))
         story.append(Spacer(1, 6 * mm))
 
     story.append(make_table(build_table_data(header, row)))
@@ -253,10 +282,13 @@ def main() -> None:
     for index, row in enumerate(rows, start=1):
         meta_entry = meta_entries[index - 1]
         billing_filename = read_billing_filename(meta_entry)
+        account_name = find_optional_column_value(header, row, ACCOUNT_NAME_FIELD_LABELS) or read_account_name(meta_entry)
         pdf_path = transaction_pdf_path(header, target_dir, row, index)
-        write_transaction_pdf(pdf_path, vendor, header, row, index, billing_filename)
+        write_transaction_pdf(pdf_path, vendor, header, row, index, billing_filename, account_name)
         created_paths.append(pdf_path)
         meta_entry["transaction_filename"] = pdf_path.name
+        if account_name:
+            meta_entry["account_name"] = account_name
 
     if created_paths:
         write_meta_entries(target_dir, meta_entries)
