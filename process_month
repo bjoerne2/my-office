@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from python.args import validate_year_month
+from python.vendors import list_vendor_rules
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+ensure_project_venv()
+
+
+def usage() -> str:
+    return "Usage: process_month <year> <month> [--skip-export]"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, bool]:
+    if len(argv) not in (2, 3):
+        raise ValueError(usage())
+
+    year, month = validate_year_month(argv[0], argv[1], example="2026 01")
+    skip_export = False
+
+    if len(argv) == 3:
+        if argv[2] != "--skip-export":
+            raise ValueError(f"Unbekannte Option: {argv[2]}\n{usage()}")
+        skip_export = True
+
+    return year, month, skip_export
+
+
+def run_step(repo_root: Path, script_name: str, args: list[str]) -> None:
+    script_path = repo_root / script_name
+    if not script_path.is_file():
+        raise RuntimeError(f"Skript nicht gefunden: {script_path}")
+
+    command = [str(script_path), *args]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+
+    if result.stdout:
+        print(result.stdout.strip())
+
+    if result.returncode != 0:
+        error_output = result.stderr.strip() if result.stderr else ""
+        details = error_output or result.stdout.strip() or f"{script_name} fehlgeschlagen"
+        raise RuntimeError(details)
+
+
+def is_missing_vendor_transactions_error(message: str) -> bool:
+    return "Keine Transaktionen für Rechnungssteller" in message
+
+
+def main() -> None:
+    try:
+        year, month, skip_export = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent
+    year_arg = f"{year:04d}"
+    month_arg = f"{month:02d}"
+
+    try:
+        if not skip_export:
+            print(f"==> export_transactions {year_arg} {month_arg}")
+            run_step(repo_root, "export_transactions", [year_arg, month_arg])
+
+        for vendor in list_vendor_rules():
+            print(f"==> process_vendor_month {year_arg} {month_arg} {vendor.slug} --skip-export")
+            try:
+                run_step(repo_root, "process_vendor_month", [year_arg, month_arg, vendor.slug, "--skip-export"])
+            except RuntimeError as exc:
+                if is_missing_vendor_transactions_error(str(exc)):
+                    print(f"Übersprungen: {vendor.slug} ({exc})")
+                    continue
+                raise
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+
+

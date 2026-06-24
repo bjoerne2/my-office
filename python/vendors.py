@@ -62,3 +62,8 @@ def get_vendor_rule(vendor_slug: str) -> VendorRule:
             f"Unbekannter Rechnungssteller: {vendor_slug}. Unterstützt: {supported}"
         ) from exc
 
+
+def list_vendor_rules() -> tuple[VendorRule, ...]:
+    return tuple(VENDOR_RULES[slug] for slug in sorted(VENDOR_RULES))
+
+

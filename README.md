@@ -13,6 +13,7 @@ Aktuell enthalten:
 - `create_transaction_pdfs`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
 - `merge_receipt_and_transaction_pdfs`: Führt Rechnungs-PDFs und Kontobeleg-PDFs paarweise zu kombinierten PDFs zusammen.
 - `process_vendor_month`: Führt alle Schritte für einen Anbieter und Monat als Gesamt-Workflow aus.
+- `process_month`: Führt den Gesamtprozess für alle bekannten Anbieter eines Monats aus.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
@@ -165,6 +166,22 @@ Wenn die Exportdatei bereits vorhanden ist und der MoneyMoney-Export übersprung
 
 ```bash
 ./process_vendor_month 2026 01 github --skip-export
+```
+
+### Gesamt-Workflow für alle Anbieter eines Monats
+
+```bash
+./process_month 2026 01
+```
+
+Das Skript führt zuerst `export_transactions` genau einmal aus und ruft anschließend
+`process_vendor_month <jahr> <monat> <anbieter> --skip-export` für alle bekannten Anbieter auf.
+Anbieter ohne passende Monatsbuchungen werden übersprungen.
+
+Wenn die Exportdateien bereits vorhanden sind und kein neuer MoneyMoney-Export erfolgen soll:
+
+```bash
+./process_month 2026 01 --skip-export
 ```
 
 ## rclone / Google Drive Sync
