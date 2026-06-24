@@ -26,6 +26,8 @@ GOOGLE_TOTAL_AMOUNT_PATTERN = re.compile(r"Gesamtsumme in EUR\s*([0-9][0-9.,]*)\
 GERMAN_DATE_PATTERN = re.compile(r"([0-9]{1,2})\.\s*([A-Za-zÄÖÜäöü]{3,10})\.?\s*([0-9]{4})")
 HOSTING_PDF_NUMBER_PATTERN = re.compile(r"RE-(\d+)")
 HOSTING_RENR_PATTERN = re.compile(r"Renr\s+(\d+)")
+DOMAINFACTORY_PDF_NUMBER_PATTERN = re.compile(r"_RE(\d+)\.pdf$", re.IGNORECASE)
+DOMAINFACTORY_RENR_PATTERN = re.compile(r"Rg\.\s*(\d+)\b", re.IGNORECASE)
 DATE_FIELD_LABELS = ("Buchungstag", "Datum")
 AMOUNT_FIELD_LABELS = ("Betrag",)
 ISSUER_FIELD_LABELS = ("Name", "Auftraggeber/Empfänger")
@@ -174,7 +176,23 @@ def find_column_index(header: list[str], supported_labels: tuple[str, ...]) -> i
     raise RuntimeError(f"CSV-Spalte nicht gefunden ({supported}) in {header}")
 
 
-def read_transaction_records(csv_path: Path, extract_invoice_ref: bool = False) -> list[TransactionRecord]:
+def extract_invoice_ref_from_purpose(value: str, vendor: VendorRule) -> str | None:
+    if vendor.slug == "hosting":
+        patterns = (HOSTING_RENR_PATTERN,)
+    elif vendor.slug == "domainfactory":
+        patterns = (DOMAINFACTORY_RENR_PATTERN,)
+    else:
+        patterns = ()
+
+    for pattern in patterns:
+        match = pattern.search(value)
+        if match:
+            return match.group(1)
+
+    return None
+
+
+def read_transaction_records(csv_path: Path, vendor: VendorRule) -> list[TransactionRecord]:
     with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.reader(handle, delimiter=";")
 
@@ -188,7 +206,7 @@ def read_transaction_records(csv_path: Path, extract_invoice_ref: bool = False) 
         issuer_index = find_column_index(header, ISSUER_FIELD_LABELS)
 
         zweck_index: int | None = None
-        if extract_invoice_ref:
+        if vendor.slug in {"hosting", "domainfactory"}:
             try:
                 zweck_index = find_column_index(header, ("Verwendungszweck",))
             except RuntimeError:
@@ -203,9 +221,7 @@ def read_transaction_records(csv_path: Path, extract_invoice_ref: bool = False) 
 
             invoice_ref: str | None = None
             if zweck_index is not None and zweck_index < len(row):
-                m = HOSTING_RENR_PATTERN.search(row[zweck_index])
-                if m:
-                    invoice_ref = m.group(1)
+                invoice_ref = extract_invoice_ref_from_purpose(row[zweck_index], vendor)
 
             records.append(
                 TransactionRecord(
@@ -343,6 +359,24 @@ def collect_hosting_candidates(pdf_dir: Path) -> list[PdfCandidate]:
     return candidates
 
 
+def collect_domainfactory_candidates(pdf_dir: Path) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        m = DOMAINFACTORY_PDF_NUMBER_PATTERN.search(path.name)
+        if not m:
+            continue
+
+        invoice_ref = m.group(1)
+        receipt_date = parse_pdf_date(path.name)
+        candidates.append(PdfCandidate(path=path, receipt_date=receipt_date, invoice_ref=invoice_ref))
+
+    if not candidates:
+        raise RuntimeError(f"Keine Domainfactory-PDF-Kandidaten in {pdf_dir} gefunden")
+
+    return candidates
+
+
 def extract_hp_candidate(path: Path) -> PdfCandidate | None:
     text = extract_pdf_text(path)
     normalized_text = " ".join(text.split())
@@ -382,6 +416,8 @@ def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
         return collect_google_candidates(pdf_dir)
     if vendor.slug == "hosting":
         return collect_hosting_candidates(pdf_dir)
+    if vendor.slug == "domainfactory":
+        return collect_domainfactory_candidates(pdf_dir)
 
     return collect_default_candidates(pdf_dir, vendor)
 
@@ -488,6 +524,28 @@ def choose_best_hosting_candidate(record: TransactionRecord, candidates: list[Pd
     )
 
 
+def choose_best_domainfactory_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
+    if record.invoice_ref:
+        matching = [candidate for candidate in candidates if candidate.invoice_ref == record.invoice_ref]
+        if matching:
+            return matching[0]
+
+    monthly = [
+        candidate
+        for candidate in candidates
+        if candidate.receipt_date is not None
+        and candidate.receipt_date.year == record.booking_date.year
+        and candidate.receipt_date.month == record.booking_date.month
+    ]
+    if monthly:
+        return min(monthly, key=lambda candidate: abs((candidate.receipt_date - record.booking_date).days))
+
+    raise RuntimeError(
+        f"Kein Domainfactory-PDF für Rechnungsnummer {record.invoice_ref or '(unbekannt)'} "
+        f"vom {record.booking_date.strftime('%Y-%m-%d')} gefunden"
+    )
+
+
 def match_pdfs_to_transactions(vendor: VendorRule, records: list[TransactionRecord], candidates: list[PdfCandidate]) -> list[Path]:
     if vendor.slug == "aws":
         remaining_candidates = list(candidates)
@@ -521,6 +579,15 @@ def match_pdfs_to_transactions(vendor: VendorRule, records: list[TransactionReco
         matched_paths = []
         for record in records:
             candidate = choose_best_hosting_candidate(record, remaining_candidates)
+            remaining_candidates.remove(candidate)
+            matched_paths.append(candidate.path)
+        return matched_paths
+
+    if vendor.slug == "domainfactory":
+        remaining_candidates = list(candidates)
+        matched_paths = []
+        for record in records:
+            candidate = choose_best_domainfactory_candidate(record, remaining_candidates)
             remaining_candidates.remove(candidate)
             matched_paths.append(candidate.path)
         return matched_paths
@@ -563,7 +630,7 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        transaction_records = read_transaction_records(csv_path, extract_invoice_ref=vendor.slug == "hosting")
+        transaction_records = read_transaction_records(csv_path, vendor)
         candidates = collect_candidates(pdf_dir, vendor)
         matched_pdfs = match_pdfs_to_transactions(vendor, transaction_records, candidates)
         meta_entries = [{"billing_filename": matched_pdf.name} for matched_pdf in matched_pdfs]

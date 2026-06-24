@@ -58,4 +58,15 @@
     <apps:property name='label' value='Buchführung/Moritz'/>
     <apps:property name='shouldArchive' value='false'/>
   </entry>
+
+  <entry>
+    <category term='filter'></category>
+    <title>Mail Filter</title>
+    <id>tag:mail.google.com,2008:filter:domainfactory-bookkeeping</id>
+
+    <apps:property name='from' value='service@df.eu'/>
+    <apps:property name='hasTheWord' value='&quot;df / Domainfactory&quot; has:attachment filename:pdf'/>
+    <apps:property name='label' value='Buchführung/Domainfactory'/>
+    <apps:property name='shouldArchive' value='false'/>
+  </entry>
 </feed>

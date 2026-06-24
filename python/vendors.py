@@ -17,6 +17,11 @@ VENDOR_RULES: dict[str, VendorRule] = {
         directory_name="AWS",
         match_terms=("amazon web services", "aws emea"),
     ),
+    "domainfactory": VendorRule(
+        slug="domainfactory",
+        directory_name="Domainfactory",
+        match_terms=("domainfactory gmbh",),
+    ),
     "hosting": VendorRule(
         slug="hosting",
         directory_name="hosting.de",
