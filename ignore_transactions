@@ -22,6 +22,10 @@ IGNORE_RULES: tuple[IgnoreRule, ...] = (
         name="PayPal-Konto-Abbuchung",
         match_terms=("abbuchung vom paypal-konto",),
     ),
+    IgnoreRule(
+        name="INWX",
+        match_terms=("inwx gmbh",),
+    ),
 )
 
 
