@@ -136,8 +136,11 @@ def parse_purpose_details(purpose: str) -> tuple[str, dict[str, str]]:
     return description, parsed_fields
 
 
-def build_table_data(header: list[str], row: list[str]) -> list[list[str]]:
+def build_table_data(header: list[str], row: list[str], account_name: str | None = None) -> list[list[str]]:
     pairs: list[list[str]] = []
+    if account_name:
+        pairs.append(["Konto", account_name])
+
     for key, value in zip(header, row):
         if key in ACCOUNT_NAME_FIELD_LABELS:
             continue
@@ -229,14 +232,12 @@ def write_transaction_pdf(
     summary_rows: list[list[str]] = []
     if billing_filename:
         summary_rows.append(["Rechnung", billing_filename])
-    if account_name:
-        summary_rows.append(["Konto", account_name])
 
     if summary_rows:
         story.append(make_table(summary_rows))
         story.append(Spacer(1, 6 * mm))
 
-    story.append(make_table(build_table_data(header, row)))
+    story.append(make_table(build_table_data(header, row, account_name)))
 
     document = SimpleDocTemplate(
         str(output_path),

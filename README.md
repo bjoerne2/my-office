@@ -136,7 +136,7 @@ Dabei werden alle Unterordner mit einer `transactions.csv` berücksichtigt, also
 
 Das Skript liest `tmp/staging/2026/01/GitHub/transactions.csv`, erzeugt pro Zeile ein PDF mit einer einfachen
 Schlüssel/Wert-Tabelle direkt in `tmp/staging/2026/01/GitHub/` und ergänzt die zugehörigen Meta-Einträge.
-Wenn in den Umsatzdaten eine Kontobezeichnung vorhanden ist, wird sie zusätzlich in der oberen Tabelle des PDFs angezeigt.
+Wenn in den Umsatzdaten eine Kontobezeichnung vorhanden ist, wird sie als oberste Zeile in der Buchungs-Tabelle angezeigt.
 
 ### Rechnung und Buchung zusammenführen
 

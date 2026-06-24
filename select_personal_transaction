@@ -97,12 +97,16 @@ def find_matching_rows(rows: list[list[str]], transaction_substring: str) -> lis
 
 def merged_header(source_header: list[str], target_header: list[str] | None) -> list[str]:
     if not target_header:
+        if ACCOUNT_LABEL_COLUMN in source_header:
+            return [ACCOUNT_LABEL_COLUMN, *[label for label in source_header if label != ACCOUNT_LABEL_COLUMN]]
         return list(source_header)
 
-    combined = list(target_header)
+    combined = [label for label in target_header if label != ACCOUNT_LABEL_COLUMN]
     for label in source_header:
-        if label not in combined:
+        if label != ACCOUNT_LABEL_COLUMN and label not in combined:
             combined.append(label)
+    if ACCOUNT_LABEL_COLUMN in source_header or ACCOUNT_LABEL_COLUMN in target_header:
+        return [ACCOUNT_LABEL_COLUMN, *combined]
     return combined
 
 

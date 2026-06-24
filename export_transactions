@@ -84,23 +84,20 @@ def with_account_label(csv_path: Path, account_name: str) -> Path:
         except StopIteration as exc:
             raise RuntimeError(f"Leere CSV-Datei: {csv_path}") from exc
 
-        if ACCOUNT_LABEL_COLUMN in header:
-            account_column_index = header.index(ACCOUNT_LABEL_COLUMN)
-            output_header = header
-        else:
-            account_column_index = len(header)
-            output_header = [*header, ACCOUNT_LABEL_COLUMN]
+        source_header = [label for label in header if label != ACCOUNT_LABEL_COLUMN]
+        output_header = [ACCOUNT_LABEL_COLUMN, *source_header]
 
         with labeled_path.open("w", encoding="utf-8", newline="") as target_handle:
             writer = csv.writer(target_handle, delimiter=";", lineterminator="\n")
             writer.writerow(output_header)
 
             for row in reader:
-                padded_row = list(row)
-                if len(padded_row) < len(output_header):
-                    padded_row.extend([""] * (len(output_header) - len(padded_row)))
-                padded_row[account_column_index] = account_name
-                writer.writerow(padded_row)
+                row_by_label = {
+                    label: (row[index] if index < len(row) else "")
+                    for index, label in enumerate(header)
+                    if label != ACCOUNT_LABEL_COLUMN
+                }
+                writer.writerow([account_name, *[row_by_label.get(label, "") for label in source_header]])
 
     csv_path.unlink()
     return labeled_path
