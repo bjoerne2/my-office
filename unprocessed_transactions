@@ -45,10 +45,6 @@ def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
     return month_dir(repo_root, year, month) / "transactions.csv"
 
 
-def output_csv_path(repo_root: Path, year: int, month: int) -> Path:
-    return month_dir(repo_root, year, month) / "unprocessed_transactions.csv"
-
-
 def read_csv_rows(path: Path) -> tuple[list[str], list[list[str]]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.reader(handle, delimiter=";")
@@ -97,15 +93,10 @@ def subtract_rows(all_rows: list[list[str]], processed_rows: list[list[str]]) ->
     return unprocessed
 
 
-def write_csv(path: Path, header: list[str], rows: list[list[str]]) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle, delimiter=";", lineterminator="\n")
-        writer.writerow(header)
-        writer.writerows(rows)
-
-    return path
+def write_csv_to_stdout(header: list[str], rows: list[list[str]]) -> None:
+    writer = csv.writer(sys.stdout, delimiter=";", lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(rows)
 
 
 def main() -> None:
@@ -119,7 +110,6 @@ def main() -> None:
 
     repo_root = Path(__file__).resolve().parent
     src_path = source_csv_path(repo_root, year, month)
-    dst_path = output_csv_path(repo_root, year, month)
 
     if not src_path.is_file():
         print(f"Quelldatei nicht gefunden: {src_path}")
@@ -129,12 +119,11 @@ def main() -> None:
         header, all_rows = read_csv_rows(src_path)
         processed_rows = collect_processed_rows(month_dir(repo_root, year, month))
         unprocessed_rows = subtract_rows(all_rows, processed_rows)
-        output_path = write_csv(dst_path, header, unprocessed_rows)
     except RuntimeError as exc:
         print(f"Fehler: {exc}")
         sys.exit(1)
 
-    print(output_path)
+    write_csv_to_stdout(header, unprocessed_rows)
 
 
 if __name__ == "__main__":
