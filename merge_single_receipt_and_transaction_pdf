@@ -68,6 +68,13 @@ def read_transaction_filename(meta_entry: dict[str, str]) -> str | None:
     return None
 
 
+def read_billing_filename(meta_entry: dict[str, str]) -> str | None:
+    billing_filename = meta_entry.get("billing_filename")
+    if isinstance(billing_filename, str) and billing_filename.strip():
+        return billing_filename.strip()
+    return None
+
+
 def merged_filename(billing_filename: str) -> str:
     path = Path(billing_filename)
     return f"{path.stem}-beleg_und_buchung{path.suffix or '.pdf'}"
@@ -101,7 +108,13 @@ def main() -> None:
         if not transaction_pdf.is_file():
             raise RuntimeError(f"Kontobeleg-PDF nicht gefunden: {transaction_pdf}")
 
-        billing_pdf = require_single_billing_pdf(target, transaction_filename)
+        billing_filename = read_billing_filename(meta_entry)
+        if billing_filename:
+            billing_pdf = target / billing_filename
+            if not billing_pdf.is_file():
+                raise RuntimeError(f"Rechnungs-PDF nicht gefunden: {billing_pdf}")
+        else:
+            billing_pdf = require_single_billing_pdf(target, transaction_filename)
         output_pdf = target / merged_filename(billing_pdf.name)
         merge_pdfs(billing_pdf, transaction_pdf, output_pdf)
 

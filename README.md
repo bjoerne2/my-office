@@ -12,8 +12,10 @@ Aktuell enthalten:
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data/<Rechnungssteller>` und kopiert sie direkt in den Staging-Monatsordner.
 - `create_transaction_pdfs`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
 - `create_single_transaction_pdf`: Erzeugt aus genau einer Buchung in einem manuell vorbereiteten Ordner ein Buchungs-PDF und pflegt `meta.json`.
+- `detect_single_receipt_pdf`: Sucht in einem manuell vorbereiteten Ordner das einzelne Rechnungs-PDF und schreibt dessen Dateinamen nach `meta.json`.
 - `merge_receipt_and_transaction_pdfs`: Führt Rechnungs-PDFs und Kontobeleg-PDFs paarweise zu kombinierten PDFs zusammen.
 - `merge_single_receipt_and_transaction_pdf`: Führt in einem manuell vorbereiteten Ordner genau ein Rechnungs-PDF mit dem erzeugten Buchungs-PDF zusammen und pflegt `meta.json`.
+- `process_single_transaction`: Führt den manuellen Einzelprozess (Rechnung erkennen, Buchungs-PDF erzeugen, zusammenführen) für einen Ordner aus.
 - `process_vendor_month`: Führt alle Schritte für einen Anbieter und Monat als Gesamt-Workflow aus.
 - `process_month`: Führt den Gesamtprozess für alle bekannten Anbieter eines Monats aus.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
@@ -150,6 +152,17 @@ Wenn in den Umsatzdaten eine Kontobezeichnung vorhanden ist, wird sie als oberst
 Der Zielordner (relativ zum Repository oder absolut) muss eine `transactions.csv` mit genau einer Buchung enthalten. Das Skript erzeugt daraus
 ein einzelnes Buchungs-PDF im selben Ordner und legt bzw. aktualisiert die `meta.json`.
 
+Wenn bereits ein Rechnungsname in `meta.json` hinterlegt ist, wird dieser zusätzlich im Buchungs-PDF angezeigt.
+
+### Einzelnes Rechnungs-PDF in `meta.json` erkennen
+
+```bash
+./detect_single_receipt_pdf tmp/staging/2026/01/MeinOrdner
+```
+
+Der Zielordner (relativ zum Repository oder absolut) muss genau ein Rechnungs-PDF enthalten.
+Das Skript schreibt dessen Dateinamen als `billing_filename` nach `meta.json`.
+
 ### Rechnung und Buchung zusammenführen
 
 ```bash
@@ -167,6 +180,18 @@ Das Skript führt die in `meta.json` zugeordneten Rechnungs- und Kontobeleg-PDFs
 
 Der Zielordner (relativ zum Repository oder absolut) muss genau ein Rechnungs-PDF sowie ein zuvor erzeugtes Buchungs-PDF enthalten.
 Das Skript aktualisiert die `meta.json` und erzeugt ein kombiniertes PDF auf Basis des Rechnungsdateinamens.
+
+### Manuellen Einzelprozess vollständig ausführen
+
+```bash
+./process_single_transaction tmp/staging/2026/01/MeinOrdner
+```
+
+Das Skript führt nacheinander aus:
+
+1. `detect_single_receipt_pdf`
+2. `create_single_transaction_pdf`
+3. `merge_single_receipt_and_transaction_pdf`
 
 ### Gesamt-Workflow für einen Anbieter
 
