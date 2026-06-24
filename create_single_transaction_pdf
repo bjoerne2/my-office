@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+ensure_project_venv()
+
+from python.meta import read_meta_entries, write_meta_entries
+from python.transaction_pdf_common import (
+    ACCOUNT_NAME_FIELD_LABELS,
+    find_optional_column_value,
+    require_single_transaction,
+    transaction_pdf_path,
+    write_transaction_pdf,
+)
+
+
+def usage() -> str:
+    return "Usage: create_single_transaction_pdf <ordnername>"
+
+
+def parse_args(argv: list[str]) -> str:
+    if len(argv) != 1:
+        raise ValueError(usage())
+
+    folder_name = argv[0].strip()
+    if not folder_name:
+        raise ValueError("Ordnername darf nicht leer sein")
+
+    return folder_name
+
+
+def target_dir(repo_root: Path, folder_name: str) -> Path:
+    target = Path(folder_name).expanduser()
+    if target.is_absolute():
+        return target
+    return (repo_root / target).resolve()
+
+
+def transactions_csv_path(target: Path) -> Path:
+    return target / "transactions.csv"
+
+
+def read_billing_filename(meta_entry: dict[str, str]) -> str | None:
+    billing_filename = meta_entry.get("billing_filename")
+    if isinstance(billing_filename, str) and billing_filename.strip():
+        return billing_filename.strip()
+    return None
+
+
+def main() -> None:
+    try:
+        folder_name = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent
+    target = target_dir(repo_root, folder_name)
+    csv_path = transactions_csv_path(target)
+
+    if not target.is_dir():
+        print(f"Ordner nicht gefunden: {target}")
+        sys.exit(1)
+
+    if not csv_path.is_file():
+        print(f"Transaktionsdatei nicht gefunden: {csv_path}")
+        sys.exit(1)
+
+    try:
+        header, row = require_single_transaction(csv_path)
+        meta_entries = read_meta_entries(target)
+        if len(meta_entries) > 1:
+            raise RuntimeError(f"meta.json enthält mehr als einen Eintrag: {target / 'meta.json'}")
+        meta_entry = dict(meta_entries[0]) if meta_entries else {}
+        billing_filename = read_billing_filename(meta_entry)
+        account_name = find_optional_column_value(header, row, ACCOUNT_NAME_FIELD_LABELS)
+        pdf_path = transaction_pdf_path(header, target, row, 1)
+        write_transaction_pdf(pdf_path, header, row, billing_filename=billing_filename, account_name=account_name)
+        meta_entry["transaction_filename"] = pdf_path.name
+        if account_name:
+            meta_entry["account_name"] = account_name
+        write_meta_entries(target, [meta_entry])
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    print(pdf_path)
+    print(target / 'meta.json')
+
+
+if __name__ == "__main__":
+    main()
+
+

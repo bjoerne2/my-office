@@ -11,7 +11,9 @@ Aktuell enthalten:
 - `ignore_transactions`: Verschiebt fest definierte, bewusst zu ignorierende Monatsumsätze nach `tmp/staging/<jahr>/<monat>/Ignored/transactions.csv`.
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data/<Rechnungssteller>` und kopiert sie direkt in den Staging-Monatsordner.
 - `create_transaction_pdfs`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
+- `create_single_transaction_pdf`: Erzeugt aus genau einer Buchung in einem manuell vorbereiteten Ordner ein Buchungs-PDF und pflegt `meta.json`.
 - `merge_receipt_and_transaction_pdfs`: Führt Rechnungs-PDFs und Kontobeleg-PDFs paarweise zu kombinierten PDFs zusammen.
+- `merge_single_receipt_and_transaction_pdf`: Führt in einem manuell vorbereiteten Ordner genau ein Rechnungs-PDF mit dem erzeugten Buchungs-PDF zusammen und pflegt `meta.json`.
 - `process_vendor_month`: Führt alle Schritte für einen Anbieter und Monat als Gesamt-Workflow aus.
 - `process_month`: Führt den Gesamtprozess für alle bekannten Anbieter eines Monats aus.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
@@ -139,6 +141,15 @@ Das Skript liest `tmp/staging/2026/01/GitHub/transactions.csv`, erzeugt pro Zeil
 Schlüssel/Wert-Tabelle direkt in `tmp/staging/2026/01/GitHub/` und ergänzt die zugehörigen Meta-Einträge.
 Wenn in den Umsatzdaten eine Kontobezeichnung vorhanden ist, wird sie als oberste Zeile in der Buchungs-Tabelle angezeigt.
 
+### Einzelnes Buchungs-PDF in manuellem Ordner erzeugen
+
+```bash
+./create_single_transaction_pdf tmp/staging/2026/01/MeinOrdner
+```
+
+Der Zielordner (relativ zum Repository oder absolut) muss eine `transactions.csv` mit genau einer Buchung enthalten. Das Skript erzeugt daraus
+ein einzelnes Buchungs-PDF im selben Ordner und legt bzw. aktualisiert die `meta.json`.
+
 ### Rechnung und Buchung zusammenführen
 
 ```bash
@@ -147,6 +158,15 @@ Wenn in den Umsatzdaten eine Kontobezeichnung vorhanden ist, wird sie als oberst
 
 Das Skript führt die in `meta.json` zugeordneten Rechnungs- und Kontobeleg-PDFs im Ordner
 `tmp/staging/2026/01/GitHub/` paarweise zusammen und schreibt Ausgabedateien auf Basis des Rechnungsdateinamens.
+
+### Einzelne manuelle Rechnung und Buchung zusammenführen
+
+```bash
+./merge_single_receipt_and_transaction_pdf tmp/staging/2026/01/MeinOrdner
+```
+
+Der Zielordner (relativ zum Repository oder absolut) muss genau ein Rechnungs-PDF sowie ein zuvor erzeugtes Buchungs-PDF enthalten.
+Das Skript aktualisiert die `meta.json` und erzeugt ein kombiniertes PDF auf Basis des Rechnungsdateinamens.
 
 ### Gesamt-Workflow für einen Anbieter
 
