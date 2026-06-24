@@ -7,6 +7,7 @@ Aktuell enthalten:
 - `process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
 - `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSV nach `tmp/staging/<jahr>/<monat>/transactions.csv`.
 - `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
+- `ignore_transactions`: Verschiebt fest definierte, bewusst zu ignorierende Monatsumsätze nach `tmp/staging/<jahr>/<monat>/Ignored/transactions.csv`.
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data/<Rechnungssteller>` und kopiert sie direkt in den Staging-Monatsordner.
 - `create_transaction_pdfs`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
 - `merge_receipt_and_transaction_pdfs`: Führt Rechnungs-PDFs und Kontobeleg-PDFs paarweise zu kombinierten PDFs zusammen.
@@ -85,6 +86,16 @@ Die Ausgabe wird nach `tmp/staging/2026/05/transactions.csv` verschoben.
 
 Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
 
+### MoneyMoney Ignorierliste erzeugen
+
+```bash
+./ignore_transactions 2026 01
+```
+
+Das Skript liest `tmp/staging/2026/01/transactions.csv`, filtert fest definierte ignorierbare Umsätze
+(aktuell z. B. Zeilen mit `Abbuchung vom PayPal-Konto`) und schreibt sie nach
+`tmp/staging/2026/01/Ignored/transactions.csv`.
+
 ### MoneyMoney PDF-Matching
 
 ```bash
@@ -95,6 +106,15 @@ Die passenden PDFs werden anbieterspezifisch gematcht, direkt in den Staging-Ord
 und als Eintragsliste in `meta.json` abgelegt. Für GitHub erfolgt das Matching über den Dateinamen,
 für AWS über Betrag und Inhalte der PDF-Dateien, für `hosting.de` und `Domainfactory` primär
 über Rechnungsnummern aus Umsatzdaten und PDF-Dateinamen.
+
+### Nicht verarbeitete Transaktionen ausgeben
+
+```bash
+./unprocessed_transactions 2026 01
+```
+
+Das Skript gibt die verbleibenden, noch nicht verarbeiteten Transaktionen als CSV auf der Standardausgabe aus.
+Dabei werden alle Unterordner mit einer `transactions.csv` berücksichtigt, also auch `Ignored/`.
 
 ### MoneyMoney Transaktions-PDF erzeugen
 
