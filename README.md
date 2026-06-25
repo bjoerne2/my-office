@@ -18,6 +18,7 @@ Aktuell enthalten:
 - `process_single_transaction`: Führt den manuellen Einzelprozess (Rechnung erkennen, Buchungs-PDF erzeugen, zusammenführen) für einen Ordner aus.
 - `process_vendor_month`: Führt alle Schritte für einen Anbieter und Monat als Gesamt-Workflow aus.
 - `process_month`: Führt den Gesamtprozess für alle bekannten Anbieter eines Monats aus.
+- `copy_staging_documents`: Kopiert Rechnungs-, kombinierte PDFs und `meta.json` aus `tmp/staging` in ein lokal konfiguriertes Zielverzeichnis.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
@@ -66,6 +67,20 @@ Wenn neue Pakete hinzukommen:
 ```bash
 ./.venv/bin/python -m pip install <paketname>
 ./.venv/bin/python -m pip freeze > requirements.txt
+```
+
+## Lokale Projektkonfiguration
+
+Für lokale, nicht versionierte Pfade kann im Projektverzeichnis eine Datei
+`.my-office.local.json` angelegt werden. Eine Vorlage liegt in
+`my-office.local.example.json`.
+
+Beispiel:
+
+```json
+{
+  "documents_export_dir": "~/Documents/Buchfuehrung"
+}
 ```
 
 ## Verwendung
@@ -221,6 +236,26 @@ Wenn die Exportdateien bereits vorhanden sind und kein neuer MoneyMoney-Export e
 ```bash
 ./process_month 2026 01 --skip-export
 ```
+
+### PDFs aus `tmp/staging` in ein Dokumentenziel exportieren
+
+Vorher die lokale Zielkonfiguration in `.my-office.local.json` setzen.
+
+Dry-Run:
+
+```bash
+./copy_staging_documents --dry-run
+```
+
+Echter Kopiervorgang:
+
+```bash
+./copy_staging_documents
+```
+
+Das Skript durchsucht alle Unterordner von `tmp/staging` nach `meta.json` und kopiert
+für alle Einträge die Dateien aus `billing_filename` und `merged_filename` sowie die jeweilige
+`meta.json` nach `<Zielordner>/<Jahr>/<Monat>/<Anbieter>/`.
 
 ## rclone / Google Drive Sync
 
