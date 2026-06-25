@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from python.args import validate_year_month
+
 
 def ensure_project_venv() -> None:
     """Automatically use the project venv when available."""
@@ -32,15 +34,22 @@ CONFIG_KEY = "documents_export_dir"
 
 
 def usage() -> str:
-    return "Usage: copy_staging_documents [--dry-run]"
+    return "Usage: copy_staging_documents <year> <month> [--dry-run]"
 
 
-def parse_args(argv: list[str]) -> bool:
-    if not argv:
-        return False
-    if argv == ["--dry-run"]:
-        return True
-    raise ValueError(usage())
+def parse_args(argv: list[str]) -> tuple[int, int, bool]:
+    if len(argv) not in (2, 3):
+        raise ValueError(usage())
+
+    year, month = validate_year_month(argv[0], argv[1], example="2026 01")
+    dry_run = False
+
+    if len(argv) == 3:
+        if argv[2] != "--dry-run":
+            raise ValueError(f"Unbekannte Option: {argv[2]}\n{usage()}")
+        dry_run = True
+
+    return year, month, dry_run
 
 
 def repo_root() -> Path:
@@ -81,6 +90,10 @@ def staging_root(root: Path) -> Path:
     return root / "tmp" / "staging"
 
 
+def staging_month_dir(root: Path, year: int, month: int) -> Path:
+    return staging_root(root) / f"{year:04d}" / f"{month:02d}"
+
+
 def read_meta_entries(path: Path) -> list[dict[str, Any]]:
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -99,38 +112,33 @@ def read_meta_entries(path: Path) -> list[dict[str, Any]]:
     return entries
 
 
-def year_month_vendor_dir(path: Path, staging: Path) -> tuple[str, str, str] | None:
+def vendor_dir_name(path: Path, staging: Path) -> str | None:
     try:
         relative = path.relative_to(staging)
     except ValueError:
         return None
 
     parts = relative.parts
-    if len(parts) < 3:
+    if len(parts) < 1:
         return None
 
-    year, month, vendor = parts[0], parts[1], parts[2]
-    if len(year) != 4 or not year.isdigit():
-        return None
-    if len(month) != 2 or not month.isdigit():
-        return None
+    vendor = parts[0]
     if not vendor:
         return None
 
-    return year, month, vendor
+    return vendor
 
 
-def collect_copy_jobs(staging: Path, target_base: Path) -> list[tuple[Path, Path]]:
+def collect_copy_jobs(staging: Path, target_base: Path, year: int, month: int) -> list[tuple[Path, Path]]:
     jobs: list[tuple[Path, Path]] = []
 
     for meta_path in sorted(staging.glob("**/meta.json")):
         parent = meta_path.parent
-        location = year_month_vendor_dir(parent, staging)
-        if location is None:
+        vendor = vendor_dir_name(parent, staging)
+        if vendor is None:
             continue
 
-        year, month, vendor = location
-        target_dir = target_base / year / month / vendor
+        target_dir = target_base / f"{year:04d}" / f"{month:02d}" / vendor
         entries = read_meta_entries(meta_path)
 
         jobs.append((meta_path, target_dir / meta_path.name))
@@ -187,14 +195,14 @@ def perform_copy(jobs: list[tuple[Path, Path]], dry_run: bool) -> None:
 
 def main() -> None:
     try:
-        dry_run = parse_args(sys.argv[1:])
+        year, month, dry_run = parse_args(sys.argv[1:])
     except ValueError as exc:
         print(exc)
         sys.exit(1)
 
     root = repo_root()
     config_file = config_path(root)
-    staging = staging_root(root)
+    staging = staging_month_dir(root, year, month)
 
     if not staging.is_dir():
         print(f"Staging-Verzeichnis nicht gefunden: {staging}")
@@ -203,7 +211,7 @@ def main() -> None:
     try:
         config = load_config(config_file)
         target_base = export_target_dir(config)
-        jobs = collect_copy_jobs(staging, target_base)
+        jobs = collect_copy_jobs(staging, target_base, year, month)
         jobs = deduplicate_jobs(jobs)
         ensure_no_destination_conflicts(jobs)
     except RuntimeError as exc:

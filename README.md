@@ -244,16 +244,16 @@ Vorher die lokale Zielkonfiguration in `.my-office.local.json` setzen.
 Dry-Run:
 
 ```bash
-./copy_staging_documents --dry-run
+./copy_staging_documents 2026 01 --dry-run
 ```
 
 Echter Kopiervorgang:
 
 ```bash
-./copy_staging_documents
+./copy_staging_documents 2026 01
 ```
 
-Das Skript durchsucht alle Unterordner von `tmp/staging` nach `meta.json` und kopiert
+Das Skript durchsucht den Monatsordner `tmp/staging/<Jahr>/<Monat>` nach `meta.json` und kopiert
 für alle Einträge die Dateien aus `billing_filename` und `merged_filename` sowie die jeweilige
 `meta.json` nach `<Zielordner>/<Jahr>/<Monat>/<Anbieter>/`.
 
