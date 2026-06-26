@@ -19,6 +19,7 @@ Aktuell enthalten:
 - `process_vendor_month`: Führt alle Schritte für einen Anbieter und Monat als Gesamt-Workflow aus.
 - `process_month`: Führt den Gesamtprozess für alle bekannten Anbieter eines Monats aus.
 - `copy_staging_documents`: Kopiert Rechnungs-, kombinierte PDFs und `meta.json` aus `tmp/staging` in ein lokal konfiguriertes Zielverzeichnis.
+- `copy_datev_rechnungseingang`: Kopiert kombinierte PDFs aus `merged_filename` nach `tmp/staging/<jahr>/<monat>/DATEV Unternehmen Online/Rechnungseingang/`.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
@@ -256,6 +257,22 @@ Echter Kopiervorgang:
 Das Skript durchsucht den Monatsordner `tmp/staging/<Jahr>/<Monat>` nach `meta.json` und kopiert
 für alle Einträge die Dateien aus `billing_filename` und `merged_filename` sowie die jeweilige
 `meta.json` nach `<Zielordner>/<Jahr>/<Monat>/<Anbieter>/`.
+
+### Kombinierte PDFs für DATEV Rechnungseingang bereitstellen
+
+```bash
+./copy_datev_rechnungseingang 2026 01
+```
+
+Das Skript durchsucht `tmp/staging/<Jahr>/<Monat>` nach `meta.json` und kopiert alle gefundenen
+`merged_filename`-Dateien nach
+`tmp/staging/<Jahr>/<Monat>/DATEV Unternehmen Online/Rechnungseingang/`.
+
+Die Zieldateien werden dabei so benannt:
+
+```text
+<Anbieter>__<merged_filename>
+```
 
 ## rclone / Google Drive Sync
 

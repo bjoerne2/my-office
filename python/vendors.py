@@ -9,6 +9,7 @@ class VendorRule:
     directory_name: str
     match_terms: tuple[str, ...] = ()
     pdf_prefix: str = ""
+    leistungsinhalt: str | None = None
 
 
 VENDOR_RULES: dict[str, VendorRule] = {
@@ -16,37 +17,44 @@ VENDOR_RULES: dict[str, VendorRule] = {
         slug="aws",
         directory_name="AWS",
         match_terms=("amazon web services", "aws emea"),
+        leistungsinhalt="Cloud-Infrastruktur / IT-Betrieb",
     ),
     "domainfactory": VendorRule(
         slug="domainfactory",
         directory_name="Domainfactory",
         match_terms=("domainfactory gmbh",),
+        leistungsinhalt="Webhosting und Internet-Infrastruktur",
     ),
     "hosting": VendorRule(
         slug="hosting",
         directory_name="hosting.de",
         match_terms=("hosting.de gmbh",),
+        leistungsinhalt="Domains, Hosting und technische Internet-Infrastruktur",
     ),
     "hp": VendorRule(
         slug="hp",
         directory_name="HP Instant Ink",
         match_terms=("hp inc instant ink de",),
+        leistungsinhalt="Drucker-Abo und laufende Druckkosten",
     ),
     "moritz": VendorRule(
         slug="moritz",
         directory_name="Moritz",
         match_terms=("moritz hoeppner",),
+        leistungsinhalt="Fremdleistung Softwareentwicklung",
     ),
     "google": VendorRule(
         slug="google",
         directory_name="Google",
         match_terms=("google cloud emea limited", "apps commerce"),
+        leistungsinhalt="IT-/Cloud-Dienste von Google",
     ),
     "github": VendorRule(
         slug="github",
         directory_name="GitHub",
         match_terms=("github, inc.",),
         pdf_prefix="github-",
+        leistungsinhalt="Quellcodeverwaltung und Entwicklerplattform",
     ),
 }
 
