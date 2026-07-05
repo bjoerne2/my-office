@@ -230,6 +230,7 @@ Der Workflow führt nacheinander aus:
 ```
 
 Das Skript führt zuerst `export_transactions` genau einmal aus und ruft anschließend
+`create_paypal_income_pdf <jahr> <monat>` sowie danach
 `process_vendor_month <jahr> <monat> <anbieter>` für alle bekannten Anbieter auf.
 Anbieter ohne passende Monatsbuchungen werden übersprungen.
 
