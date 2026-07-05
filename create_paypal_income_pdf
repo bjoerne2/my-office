@@ -112,10 +112,28 @@ def read_paypal_sums(csv_path: Path) -> tuple[Decimal, Decimal]:
             purpose = row[purpose_index]
             amount = parse_eur_amount(row[amount_index])
 
-            if "Umsatzart: Payment" in purpose:
-                payment_sum += amount
-            elif "Umsatzart: Fee" in purpose:
+            if any(
+                marker in purpose
+                for marker in (
+                    "Umsatzart: Fee",
+                    "Umsatzart: Fee reversal",
+                    "Umsatzart: Refunded fee",
+                )
+            ):
                 fee_sum += amount
+            elif any(
+                marker in purpose
+                for marker in (
+                    "Umsatzart: Payment",
+                    "Umsatzart: Recurring payment",
+                    "Umsatzart: Refund",
+                )
+            ):
+                payment_sum += amount
+            elif "Umsatzart: Transfer" in purpose:
+                continue
+            else:
+                raise RuntimeError(f"Unbekannte PayPal-Umsatzart in Zeile: {purpose}")
 
     return payment_sum, fee_sum
 
