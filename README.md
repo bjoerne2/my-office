@@ -20,6 +20,7 @@ Aktuell enthalten:
 - `process_month`: Führt den Gesamtprozess für alle bekannten Anbieter eines Monats aus.
 - `copy_staging_documents`: Kopiert Rechnungs-, kombinierte PDFs und `meta.json` aus `tmp/staging` in ein lokal konfiguriertes Zielverzeichnis.
 - `copy_datev_rechnungseingang`: Kopiert kombinierte PDFs aus `merged_filename` nach `tmp/staging/<jahr>/<monat>/DATEV Unternehmen Online/Rechnungseingang/`.
+- `create_paypal_income_pdf`: Erstellt aus `transactions_paypal.csv` ein Einnahmen-PDF für monkkee und pflegt den `PayPal`-Ordner inkl. `meta.json`.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
@@ -273,6 +274,19 @@ Die Zieldateien werden dabei so benannt:
 ```text
 <Anbieter>__<merged_filename>
 ```
+
+### PayPal-Einnahmen-PDF für monkkee erzeugen
+
+```bash
+./create_paypal_income_pdf 2026 01
+```
+
+Das Skript liest `tmp/staging/<Jahr>/<Monat>/transactions_paypal.csv`, summiert alle Zeilen mit
+`Umsatzart: Payment` sowie alle Zeilen mit `Umsatzart: Fee` und erzeugt daraus im Ordner
+`tmp/staging/<Jahr>/<Monat>/PayPal/` die Datei `Einnahmen monkkee.pdf`.
+
+Die zugehörige `meta.json` wird mit einem Eintrag gepflegt, bei dem `billing_filename` und
+`merged_filename` beide auf `Einnahmen monkkee.pdf` gesetzt werden.
 
 ## rclone / Google Drive Sync
 

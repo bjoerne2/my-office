@@ -35,6 +35,7 @@ def usage() -> str:
 ACCOUNT_EXPORTS = (
     ("DKB-Business", "transactions.csv"),
     ("Girokonto", "transactions_personal.csv"),
+    ("paypal@monkkee.com", "transactions_paypal.csv"),
 )
 ACCOUNT_LABEL_COLUMN = "Kontobezeichnung"
 
