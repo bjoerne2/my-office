@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 
 from python.args import validate_year_month
+from python.transactions_paths import PERSONAL_ACCOUNT_NAME, account_csv_path
+
 ACCOUNT_LABEL_COLUMN = "Kontobezeichnung"
-PERSONAL_TRANSACTIONS_FILENAME = "transactions_personal.csv"
 TARGET_TRANSACTIONS_FILENAME = "transactions.csv"
 
 
@@ -53,7 +54,7 @@ def month_dir(repo_root: Path, year: int, month: int) -> Path:
 
 
 def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
-    return month_dir(repo_root, year, month) / PERSONAL_TRANSACTIONS_FILENAME
+    return account_csv_path(repo_root, year, month, PERSONAL_ACCOUNT_NAME)
 
 
 def resolve_target_dir(repo_root: Path, year: int, month: int, target_dir_value: str) -> Path:

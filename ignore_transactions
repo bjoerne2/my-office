@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from python.args import validate_year_month
+from python.transactions_paths import BUSINESS_ACCOUNT_NAME, account_csv_path
 
 
 @dataclass(frozen=True)
@@ -60,7 +61,7 @@ def month_dir(repo_root: Path, year: int, month: int) -> Path:
 
 
 def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
-    return month_dir(repo_root, year, month) / "transactions.csv"
+    return account_csv_path(repo_root, year, month, BUSINESS_ACCOUNT_NAME)
 
 
 def ignored_csv_path(repo_root: Path, year: int, month: int) -> Path:

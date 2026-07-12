@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from python.args import validate_vendor, validate_year_month
+from python.transactions_paths import BUSINESS_ACCOUNT_NAME, account_csv_path
 from python.vendors import VendorRule, get_vendor_rule
 
 
@@ -40,7 +41,7 @@ def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
 
 
 def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
-	return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / "transactions.csv"
+	return account_csv_path(repo_root, year, month, BUSINESS_ACCOUNT_NAME)
 
 
 def destination_csv_path(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:

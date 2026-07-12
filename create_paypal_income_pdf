@@ -43,9 +43,9 @@ except ModuleNotFoundError as exc:
 
 from python.args import validate_year_month
 from python.meta import write_meta_entries
+from python.transactions_paths import PAYPAL_ACCOUNT_NAME, account_csv_path
 
 PAYPAL_DIRNAME = "PayPal"
-PAYPAL_CSV_FILENAME = "transactions_paypal.csv"
 PDF_FILENAME = "Einnahmen monkkee.pdf"
 
 
@@ -65,7 +65,7 @@ def month_dir(repo_root: Path, year: int, month: int) -> Path:
 
 
 def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
-    return month_dir(repo_root, year, month) / PAYPAL_CSV_FILENAME
+    return account_csv_path(repo_root, year, month, PAYPAL_ACCOUNT_NAME)
 
 
 def output_dir(repo_root: Path, year: int, month: int) -> Path:

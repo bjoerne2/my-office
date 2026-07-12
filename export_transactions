@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from python.args import validate_year_month
+from python.transactions_paths import transactions_dir
 
 
 def ensure_project_venv() -> None:
@@ -33,9 +34,10 @@ def usage() -> str:
 
 
 ACCOUNT_EXPORTS = (
-    ("DKB-Business", "transactions.csv"),
-    ("Girokonto", "transactions_personal.csv"),
-    ("paypal@monkkee.com", "transactions_paypal.csv"),
+    "DKB-Business",
+    "Girokonto",
+    "DKB-VISA-Business-Card",
+    "paypal@monkkee.com",
 )
 ACCOUNT_LABEL_COLUMN = "Kontobezeichnung"
 
@@ -104,11 +106,11 @@ def with_account_label(csv_path: Path, account_name: str) -> Path:
     return labeled_path
 
 
-def move_export(csv_path: Path, repo_root: Path, year: int, month: int, destination_name: str) -> Path:
-    destination_dir = repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}"
+def move_export(csv_path: Path, repo_root: Path, year: int, month: int, account_name: str) -> Path:
+    destination_dir = transactions_dir(repo_root, year, month)
     destination_dir.mkdir(parents=True, exist_ok=True)
 
-    destination_path = destination_dir / destination_name
+    destination_path = destination_dir / f"{account_name}.csv"
     if destination_path.exists():
         destination_path.unlink()
 
@@ -136,10 +138,10 @@ def main() -> None:
 
     try:
         destination_paths: list[Path] = []
-        for account_name, destination_name in ACCOUNT_EXPORTS:
+        for account_name in ACCOUNT_EXPORTS:
             csv_path = run_export(script_path, account_name, from_date, to_date)
             labeled_path = with_account_label(csv_path, account_name)
-            destination_paths.append(move_export(labeled_path, repo_root, year, month, destination_name))
+            destination_paths.append(move_export(labeled_path, repo_root, year, month, account_name))
     except RuntimeError as exc:
         print(f"Fehler: {exc}")
         sys.exit(1)

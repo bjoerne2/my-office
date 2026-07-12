@@ -4,7 +4,7 @@ Dieses Repository enthält kleine Office-Automatisierungen.
 
 Aktuell enthalten:
 
-- `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSVs nach `tmp/staging/<jahr>/<monat>/transactions.csv` sowie `tmp/staging/<jahr>/<monat>/transactions_personal.csv`.
+- `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney in den Unterordner `tmp/staging/<jahr>/<monat>/Transactions/` und benennt die CSV-Dateien nach dem Konto.
 - `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
 - `select_personal_transaction`: Wählt genau eine persönliche Buchung aus `transactions_personal.csv` aus und übernimmt sie in einen Zielordner.
 - `ignore_transactions`: Verschiebt fest definierte, bewusst zu ignorierende Monatsumsätze nach `tmp/staging/<jahr>/<monat>/Ignored/transactions.csv`.
@@ -19,7 +19,7 @@ Aktuell enthalten:
 - `process_month`: Führt den Gesamtprozess für alle bekannten Anbieter eines Monats aus.
 - `copy_staging_documents`: Kopiert Rechnungs-, kombinierte PDFs und `meta.json` aus `tmp/staging` in ein lokal konfiguriertes Zielverzeichnis.
 - `copy_datev_rechnungseingang`: Kopiert kombinierte PDFs aus `merged_filename` nach `tmp/staging/<jahr>/<monat>/DATEV Unternehmen Online/Rechnungseingang/`.
-- `create_paypal_income_pdf`: Erstellt aus `transactions_paypal.csv` ein Einnahmen-PDF für monkkee und pflegt den `PayPal`-Ordner inkl. `meta.json`.
+- `create_paypal_income_pdf`: Erstellt aus `Transactions/paypal@monkkee.com.csv` ein Einnahmen-PDF für monkkee und pflegt den `PayPal`-Ordner inkl. `meta.json`.
 - `check_documents_export`: Prüft das Dokumentenzielverzeichnis für einen Monat gegen eine Standardliste von Anbieterordnern und listet vorhandene kombinierte PDFs auf.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 - `unprocessed_transactions`: Gibt die verbleibenden, noch nicht verarbeiteten Transaktionen als CSV auf der Standardausgabe aus.
@@ -100,8 +100,15 @@ Die Ausgabe (`*_processed.xlsx`) wird im selben Verzeichnis wie die Eingabedatei
 ./export_transactions 2026 05
 ```
 
-Die Ausgabe wird nach `tmp/staging/2026/05/transactions.csv` verschoben.
-Zusätzlich wird der Export des privaten Kontos `Girokonto` nach `tmp/staging/2026/05/transactions_personal.csv` geschrieben.
+Die Ausgabe wird in den Unterordner `tmp/staging/2026/05/Transactions/` geschrieben.
+Aktuell entstehen dort z. B.:
+
+- `DKB-Business.csv`
+- `Girokonto.csv`
+- `DKB-VISA-Business-Card.csv`
+- `paypal@monkkee.com.csv`
+
+Die bisherige Hauptdatei `transactions.csv` entspricht jetzt `Transactions/DKB-Business.csv`.
 
 ### MoneyMoney Rechnungssteller-Extraktion
 
@@ -117,7 +124,7 @@ Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
 ./select_personal_transaction 2026 01 "Inwx GmbH" GitHub
 ```
 
-Das Skript sucht in `tmp/staging/2026/01/transactions_personal.csv` nach genau einer Zeile mit dem angegebenen Teilstring
+Das Skript sucht in `tmp/staging/2026/01/Transactions/Girokonto.csv` nach genau einer Zeile mit dem angegebenen Teilstring
 und übernimmt diese in `tmp/staging/2026/01/<Zielordner>/transactions.csv`. Wenn mehrere Zeilen passen, werden diese als CSV
 ausgegeben und das Skript endet mit einer Fehlermeldung.
 
@@ -127,7 +134,7 @@ ausgegeben und das Skript endet mit einer Fehlermeldung.
 ./ignore_transactions 2026 01
 ```
 
-Das Skript liest `tmp/staging/2026/01/transactions.csv`, filtert fest definierte ignorierbare Umsätze
+Das Skript liest `tmp/staging/2026/01/Transactions/DKB-Business.csv`, filtert fest definierte ignorierbare Umsätze
 (aktuell z. B. Zeilen mit `Abbuchung vom PayPal-Konto`) und schreibt sie nach
 `tmp/staging/2026/01/Ignored/transactions.csv`.
 
@@ -306,7 +313,7 @@ Regel:
 ./create_paypal_income_pdf 2026 01
 ```
 
-Das Skript liest `tmp/staging/<Jahr>/<Monat>/transactions_paypal.csv`, summiert alle Zeilen mit
+Das Skript liest `tmp/staging/<Jahr>/<Monat>/Transactions/paypal@monkkee.com.csv`, summiert alle Zeilen mit
 `Umsatzart: Payment` sowie alle Zeilen mit `Umsatzart: Fee` und erzeugt daraus im Ordner
 `tmp/staging/<Jahr>/<Monat>/PayPal/` die Datei `Einnahmen monkkee.pdf`.
 
