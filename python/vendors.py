@@ -75,3 +75,9 @@ def list_vendor_rules() -> tuple[VendorRule, ...]:
     return tuple(VENDOR_RULES[slug] for slug in sorted(VENDOR_RULES))
 
 
+def list_expected_documents_export_dirs() -> tuple[str, ...]:
+    vendor_dirs = [rule.directory_name for rule in list_vendor_rules()]
+    vendor_dirs.append("PayPal")
+    return tuple(vendor_dirs)
+
+

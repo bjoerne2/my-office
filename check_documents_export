@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from python.args import validate_year_month
+from python.vendors import list_expected_documents_export_dirs
 
 CONFIG_FILENAME = ".my-office.local.json"
 CONFIG_DIR_KEY = "documents_export_dir"
-CONFIG_EXPECTED_DIRS_KEY = "documents_export_expected_dirs"
 DOCUMENT_INDENT = 32
 
 
@@ -77,13 +77,6 @@ def export_target_dir(config: dict[str, Any]) -> Path:
     return Path(value).expanduser()
 
 
-def expected_dirs(config: dict[str, Any]) -> list[str]:
-    value = config.get(CONFIG_EXPECTED_DIRS_KEY)
-    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
-        raise RuntimeError(f"Konfigurationsschlüssel fehlt oder ist ungültig: {CONFIG_EXPECTED_DIRS_KEY}")
-    return [item.strip() for item in value]
-
-
 def month_dir(base_dir: Path, year: int, month: int) -> Path:
     return base_dir / f"{year:04d}" / f"{month:02d}"
 
@@ -134,10 +127,11 @@ def main() -> None:
     try:
         config = load_config(config_path(root))
         base_dir = export_target_dir(config)
-        expected = expected_dirs(config)
     except RuntimeError as exc:
         print(f"Fehler: {exc}")
         sys.exit(1)
+
+    expected = list(list_expected_documents_export_dirs())
 
     target_month_dir = month_dir(base_dir, year, month)
     if not target_month_dir.is_dir():

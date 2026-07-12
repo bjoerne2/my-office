@@ -40,16 +40,7 @@ Wiederverwendbare Python-Helfer liegen unter `python/`, z. B.:
 
 ```bash
 brew install python
-```
-
-## Python Update (Homebrew)
-
-```bash
-brew update
-brew upgrade python
-```
-
-## Virtuelle Umgebung einrichten
+  "documents_export_dir": "~/Documents/Buchfuehrung"
 
 Die Python-Abhängigkeiten werden projektlokal in `/.venv` installiert.
 
@@ -278,7 +269,8 @@ für alle Einträge die Dateien aus `billing_filename` und `merged_filename` sow
 
 Das Skript prüft `<documents_export_dir>/<Jahr>/<Monat>` und listet:
 
-- gefundene Anbieterordner mit `✅`, wenn sie in `documents_export_expected_dirs` stehen
+- gefundene Anbieterordner mit `✅`, wenn sie in der zentralen Anbieterdefinition aus `python/vendors.py`
+  (plus `PayPal`) enthalten sind
 - zusätzliche Anbieterordner mit `➕`
 - fehlende erwartete Anbieterordner mit `❌`
 
