@@ -148,7 +148,7 @@ def write_transaction_pdf(
     header: list[str],
     row: list[str],
     billing_filename: str | None = None,
-    leistungsinhalt: str | None = None,
+    description: str | None = None,
     account_name: str | None = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -162,8 +162,8 @@ def write_transaction_pdf(
     summary_rows: list[list[str]] = []
     if billing_filename:
         summary_rows.append(["Rechnung", billing_filename])
-    if leistungsinhalt:
-        summary_rows.append(["Leistungsinhalt", leistungsinhalt])
+    if description:
+        summary_rows.append(["Leistungsinhalt", description])
 
     if summary_rows:
         story.append(make_table(summary_rows))

@@ -65,6 +65,14 @@ def read_billing_filename(meta_entry: dict[str, str]) -> str | None:
     return None
 
 
+def read_description(meta_entry: dict[str, str]) -> str | None:
+    description = meta_entry.get("description")
+    if isinstance(description, str) and description.strip():
+        return description.strip()
+
+    return None
+
+
 def load_meta_entries(target_dir: Path, expected_count: int) -> list[dict[str, str]]:
     entries = read_meta_entries(target_dir)
     if not entries:
@@ -111,6 +119,9 @@ def main() -> None:
         meta_entry.pop("account_name", None)
         meta_entry["type"] = meta_entry.get("type") or "incoming"
         billing_filename = read_billing_filename(meta_entry)
+        description = read_description(meta_entry) or vendor.leistungsinhalt
+        if description:
+            meta_entry["description"] = description
         account_name = find_optional_column_value(header, row, ACCOUNT_NAME_FIELD_LABELS)
         pdf_path = transaction_pdf_path(header, target_dir, row, index)
         write_transaction_pdf(
@@ -118,7 +129,7 @@ def main() -> None:
             header,
             row,
             billing_filename=billing_filename,
-            leistungsinhalt=vendor.leistungsinhalt,
+            description=description,
             account_name=account_name,
         )
         created_paths.append(pdf_path)

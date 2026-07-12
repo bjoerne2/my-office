@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+ensure_project_venv()
+
+from python.args import validate_staging_folder_name, validate_year_month
+
+
+def usage() -> str:
+    return "Usage: process_single_receipt <year> <month> <ordnername> [description]"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, str, str | None]:
+    if len(argv) not in {3, 4}:
+        raise ValueError(usage())
+
+    year, month = validate_year_month(argv[0], argv[1], example="2026 01")
+    folder_name = validate_staging_folder_name(argv[2])
+    description = argv[3].strip() if len(argv) == 4 else None
+    if description == "":
+        raise ValueError("Beschreibung darf nicht leer sein")
+    return year, month, folder_name, description
+
+
+def run_step(repo_root: Path, script_name: str, args: list[str]) -> None:
+    script_path = repo_root / script_name
+    if not script_path.is_file():
+        raise RuntimeError(f"Skript nicht gefunden: {script_path}")
+
+    command = [str(script_path), *args]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+
+    if result.stdout:
+        print(result.stdout.strip())
+
+    if result.returncode != 0:
+        error_output = result.stderr.strip() if result.stderr else ""
+        details = error_output or result.stdout.strip() or f"{script_name} fehlgeschlagen"
+        raise RuntimeError(details)
+
+
+def main() -> None:
+    try:
+        year, month, folder_name, description = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent
+    steps = (
+        "detect_single_receipt_pdf",
+        "create_single_transaction_pdf",
+        "merge_single_receipt_and_transaction_pdf",
+    )
+
+    try:
+        for script_name in steps:
+            step_args = [f"{year:04d}", f"{month:02d}", folder_name]
+            if script_name == "detect_single_receipt_pdf" and description is not None:
+                step_args.append(description)
+            print(f"==> {script_name} {' '.join(step_args)}")
+            run_step(repo_root, script_name, step_args)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+
+

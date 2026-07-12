@@ -64,6 +64,13 @@ def read_billing_filename(meta_entry: dict[str, str]) -> str | None:
     return None
 
 
+def read_description(meta_entry: dict[str, str]) -> str | None:
+    description = meta_entry.get("description")
+    if isinstance(description, str) and description.strip():
+        return description.strip()
+    return None
+
+
 def main() -> None:
     try:
         year, month, folder_name = parse_args(sys.argv[1:])
@@ -92,9 +99,17 @@ def main() -> None:
         meta_entry.pop("account_name", None)
         meta_entry["type"] = meta_entry.get("type") or "incoming"
         billing_filename = read_billing_filename(meta_entry)
+        description = read_description(meta_entry)
         account_name = find_optional_column_value(header, row, ACCOUNT_NAME_FIELD_LABELS)
         pdf_path = transaction_pdf_path(header, target, row, 1)
-        write_transaction_pdf(pdf_path, header, row, billing_filename=billing_filename, account_name=account_name)
+        write_transaction_pdf(
+            pdf_path,
+            header,
+            row,
+            billing_filename=billing_filename,
+            description=description,
+            account_name=account_name,
+        )
         meta_entry["transaction_filename"] = pdf_path.name
         write_meta_entries(target, [meta_entry])
     except RuntimeError as exc:

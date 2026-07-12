@@ -34,16 +34,19 @@ MERGED_PDF_SUFFIX = "-beleg_und_buchung.pdf"
 
 
 def usage() -> str:
-    return "Usage: detect_single_receipt_pdf <year> <month> <ordnername>"
+    return "Usage: detect_single_receipt_pdf <year> <month> <ordnername> [description]"
 
 
-def parse_args(argv: list[str]) -> tuple[int, int, str]:
-    if len(argv) != 3:
+def parse_args(argv: list[str]) -> tuple[int, int, str, str | None]:
+    if len(argv) not in {3, 4}:
         raise ValueError(usage())
 
     year, month = validate_year_month(argv[0], argv[1], example="2026 01")
     folder_name = validate_staging_folder_name(argv[2])
-    return year, month, folder_name
+    description = argv[3].strip() if len(argv) == 4 else None
+    if description == "":
+        raise ValueError("Beschreibung darf nicht leer sein")
+    return year, month, folder_name, description
 
 
 def target_dir(repo_root: Path, year: int, month: int, folder_name: str) -> Path:
@@ -65,7 +68,7 @@ def candidate_receipt_pdfs(target: Path) -> list[Path]:
 
 def main() -> None:
     try:
-        year, month, folder_name = parse_args(sys.argv[1:])
+        year, month, folder_name, description = parse_args(sys.argv[1:])
     except ValueError as exc:
         print(exc)
         sys.exit(1)
@@ -88,6 +91,8 @@ def main() -> None:
 
         meta_entry = dict(meta_entries[0]) if meta_entries else {}
         meta_entry["billing_filename"] = receipt_pdfs[0].name
+        if description is not None:
+            meta_entry["description"] = description
         meta_entry["type"] = "incoming"
         write_meta_entries(target, [meta_entry])
     except RuntimeError as exc:
