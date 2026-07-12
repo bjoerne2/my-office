@@ -1,0 +1,649 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import csv
+import os
+import re
+import shutil
+import sys
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+from datetime import datetime, date
+from pathlib import Path
+
+from python.args import validate_vendor, validate_year_month
+from python.meta import write_meta_entries
+from python.vendors import VendorRule, get_vendor_rule
+
+
+DATE_PATTERN = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+AWS_INVOICE_DATE_PATTERN = re.compile(r"(?:VAT\s+)?Invoice Date:\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})")
+AWS_TOTAL_AMOUNT_PATTERN = re.compile(r"TOTAL AMOUNT\s+EUR\s+([0-9][0-9.,]*)")
+HP_BILLING_DATE_PATTERN = re.compile(r"Abrechnungsdatum:\s*([0-9]{2}\.[0-9]{2}\.[0-9]{2})")
+HP_TOTAL_AMOUNT_PATTERN = re.compile(r"Gesamtsumme:\s*([0-9][0-9.,]*)\s*€")
+GOOGLE_TOTAL_AMOUNT_PATTERN = re.compile(r"Gesamtsumme in EUR\s*([0-9][0-9.,]*)\s*€", re.IGNORECASE)
+GERMAN_DATE_PATTERN = re.compile(r"([0-9]{1,2})\.\s*([A-Za-zÄÖÜäöü]{3,10})\.?\s*([0-9]{4})")
+HOSTING_PDF_NUMBER_PATTERN = re.compile(r"RE-(\d+)")
+HOSTING_RENR_PATTERN = re.compile(r"Renr\s+(\d+)")
+DOMAINFACTORY_PDF_NUMBER_PATTERN = re.compile(r"_RE(\d+)\.pdf$", re.IGNORECASE)
+DOMAINFACTORY_RENR_PATTERN = re.compile(r"Rg\.\s*(\d+)\b", re.IGNORECASE)
+DATE_FIELD_LABELS = ("Buchungstag", "Datum")
+AMOUNT_FIELD_LABELS = ("Betrag",)
+ISSUER_FIELD_LABELS = ("Name", "Auftraggeber/Empfänger")
+
+GERMAN_MONTHS = {
+    "jan": 1,
+    "januar": 1,
+    "feb": 2,
+    "februar": 2,
+    "mae": 3,
+    "maerz": 3,
+    "mrz": 3,
+    "marz": 3,
+    "apr": 4,
+    "april": 4,
+    "mai": 5,
+    "jun": 6,
+    "juni": 6,
+    "jul": 7,
+    "juli": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "okt": 10,
+    "oktober": 10,
+    "nov": 11,
+    "november": 11,
+    "dez": 12,
+    "dezember": 12,
+}
+
+
+@dataclass(frozen=True)
+class TransactionRecord:
+    booking_date: date
+    issuer_name: str
+    amount: Decimal
+    invoice_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class PdfCandidate:
+    path: Path
+    receipt_date: date | None = None
+    total_amount: Decimal | None = None
+    kind: str | None = None
+    invoice_ref: str | None = None
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+def usage() -> str:
+    return "Usage: match_receipts <year> <month> <rechnungssteller>"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, VendorRule]:
+    if len(argv) != 3:
+        raise ValueError(usage())
+
+    year, month = validate_year_month(argv[0], argv[1], example="2026 01")
+    vendor = validate_vendor(argv[2], get_vendor_rule)
+    return year, month, vendor
+
+
+def transactions_csv_path(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
+    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name / "transactions.csv"
+
+
+def staging_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> Path:
+    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name
+
+
+def app_data_dir(repo_root: Path, vendor: VendorRule) -> Path:
+    if vendor.slug == "hp":
+        return repo_root / "tmp" / "download" / "HP Instant Ink"
+
+    return repo_root / "tmp" / "app_scripts_data" / vendor.directory_name
+
+
+def parse_ddmmyyyy(value: str) -> date:
+    return datetime.strptime(value.strip(), "%d.%m.%Y").date()
+
+
+def parse_invoice_date(value: str) -> date:
+    return datetime.strptime(value.strip(), "%B %d, %Y").date()
+
+
+def parse_ddmmyy(value: str) -> date:
+    return datetime.strptime(value.strip(), "%d.%m.%y").date()
+
+
+def parse_german_date(day: str, month_token: str, year: str) -> date:
+    normalized_month = month_token.strip().lower().replace(".", "")
+    normalized_month = normalized_month.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue")
+    month = GERMAN_MONTHS.get(normalized_month)
+    if month is None:
+        raise RuntimeError(f"Unbekannter Monatsname: {month_token}")
+
+    return date(int(year), month, int(day))
+
+
+def parse_eur_amount(value: str) -> Decimal:
+    normalized = value.strip()
+    if "." in normalized and "," in normalized:
+        normalized = normalized.replace(".", "").replace(",", ".")
+    elif "," in normalized:
+        normalized = normalized.replace(",", ".")
+    try:
+        return abs(Decimal(normalized))
+    except InvalidOperation as exc:
+        raise RuntimeError(f"Ungültiger Betrag: {value}") from exc
+
+
+def parse_pdf_date(filename: str) -> date | None:
+    match = DATE_PATTERN.search(filename)
+    if not match:
+        return None
+
+    year, month, day = (int(part) for part in match.groups())
+    return date(year, month, day)
+
+
+def find_column_index(header: list[str], supported_labels: tuple[str, ...]) -> int:
+    for label in supported_labels:
+        try:
+            return header.index(label)
+        except ValueError:
+            continue
+
+    supported = ", ".join(supported_labels)
+    raise RuntimeError(f"CSV-Spalte nicht gefunden ({supported}) in {header}")
+
+
+def extract_invoice_ref_from_purpose(value: str, vendor: VendorRule) -> str | None:
+    if vendor.slug == "hosting":
+        patterns = (HOSTING_RENR_PATTERN,)
+    elif vendor.slug == "domainfactory":
+        patterns = (DOMAINFACTORY_RENR_PATTERN,)
+    else:
+        patterns = ()
+
+    for pattern in patterns:
+        match = pattern.search(value)
+        if match:
+            return match.group(1)
+
+    return None
+
+
+def read_transaction_records(csv_path: Path, vendor: VendorRule) -> list[TransactionRecord]:
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle, delimiter=";")
+
+        try:
+            header = next(reader)
+        except StopIteration as exc:
+            raise RuntimeError(f"Leere CSV-Datei: {csv_path}") from exc
+
+        booking_date_index = find_column_index(header, DATE_FIELD_LABELS)
+        amount_index = find_column_index(header, AMOUNT_FIELD_LABELS)
+        issuer_index = find_column_index(header, ISSUER_FIELD_LABELS)
+
+        zweck_index: int | None = None
+        if vendor.slug in {"hosting", "domainfactory"}:
+            try:
+                zweck_index = find_column_index(header, ("Verwendungszweck",))
+            except RuntimeError:
+                pass
+
+        records: list[TransactionRecord] = []
+        for row in reader:
+            if not row or not any(cell.strip() for cell in row):
+                continue
+            if max(booking_date_index, amount_index, issuer_index) >= len(row):
+                raise RuntimeError(f"CSV-Zeile unvollständig: {row}")
+
+            invoice_ref: str | None = None
+            if zweck_index is not None and zweck_index < len(row):
+                invoice_ref = extract_invoice_ref_from_purpose(row[zweck_index], vendor)
+
+            records.append(
+                TransactionRecord(
+                    booking_date=parse_ddmmyyyy(row[booking_date_index]),
+                    issuer_name=row[issuer_index].strip(),
+                    amount=parse_eur_amount(row[amount_index]),
+                    invoice_ref=invoice_ref,
+                )
+            )
+
+    if not records:
+        raise RuntimeError(f"Keine Transaktionen in {csv_path} gefunden")
+
+    return records
+
+
+def collect_default_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        if not path.name.lower().startswith(vendor.pdf_prefix.lower()):
+            continue
+
+        receipt_date = parse_pdf_date(path.name)
+        if receipt_date is None:
+            continue
+
+        candidates.append(PdfCandidate(path=path, receipt_date=receipt_date))
+
+    if not candidates:
+        raise RuntimeError(f"Keine PDF-Kandidaten für {vendor.directory_name} in {pdf_dir} gefunden")
+
+    return candidates
+
+
+def extract_pdf_text(path: Path) -> str:
+    from pypdf import PdfReader
+
+    return " ".join((page.extract_text() or "") for page in PdfReader(str(path)).pages[:2])
+
+
+def extract_aws_candidate(path: Path) -> PdfCandidate | None:
+    text = extract_pdf_text(path)
+    normalized_text = " ".join(text.split())
+
+    amount_match = AWS_TOTAL_AMOUNT_PATTERN.search(normalized_text)
+    date_match = AWS_INVOICE_DATE_PATTERN.search(normalized_text)
+    if amount_match is None or date_match is None:
+        return None
+
+    kind = "marketplace" if path.name.upper().startswith("EUMP") else "service"
+    return PdfCandidate(
+        path=path,
+        receipt_date=parse_invoice_date(date_match.group(1)),
+        total_amount=parse_eur_amount(amount_match.group(1)),
+        kind=kind,
+    )
+
+
+def collect_aws_candidates(pdf_dir: Path) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        candidate = extract_aws_candidate(path)
+        if candidate is not None:
+            candidates.append(candidate)
+
+    if not candidates:
+        raise RuntimeError(f"Keine AWS-PDF-Kandidaten in {pdf_dir} gefunden")
+
+    return candidates
+
+
+def extract_google_candidate(path: Path) -> PdfCandidate | None:
+    text = extract_pdf_text(path)
+    normalized_text = " ".join(text.split())
+
+    amount_match = GOOGLE_TOTAL_AMOUNT_PATTERN.search(normalized_text)
+    if amount_match is None:
+        return None
+
+    date_matches = GERMAN_DATE_PATTERN.findall(normalized_text)
+    if not date_matches:
+        return None
+
+    parsed_dates = [parse_german_date(day, month, year) for day, month, year in date_matches]
+    receipt_date = max(parsed_dates)
+
+    return PdfCandidate(
+        path=path,
+        receipt_date=receipt_date,
+        total_amount=parse_eur_amount(amount_match.group(1)),
+    )
+
+
+def collect_google_candidates(pdf_dir: Path) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        candidate = extract_google_candidate(path)
+        if candidate is not None:
+            candidates.append(candidate)
+
+    if not candidates:
+        raise RuntimeError(f"Keine Google-PDF-Kandidaten in {pdf_dir} gefunden")
+
+    return candidates
+
+
+def collect_hosting_candidates(pdf_dir: Path) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        m = HOSTING_PDF_NUMBER_PATTERN.search(path.name)
+        if not m:
+            continue
+
+        invoice_ref = m.group(1)
+        receipt_date: date | None = None
+
+        try:
+            text = extract_pdf_text(path)
+            date_matches = re.findall(r"(\d{2})\.(\d{2})\.(\d{4})", text)
+            if date_matches:
+                day, mon, yr = date_matches[0]
+                receipt_date = date(int(yr), int(mon), int(day))
+        except Exception:
+            pass
+
+        candidates.append(PdfCandidate(path=path, receipt_date=receipt_date, invoice_ref=invoice_ref))
+
+    if not candidates:
+        raise RuntimeError(f"Keine hosting.de-PDF-Kandidaten in {pdf_dir} gefunden")
+
+    return candidates
+
+
+def collect_domainfactory_candidates(pdf_dir: Path) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        m = DOMAINFACTORY_PDF_NUMBER_PATTERN.search(path.name)
+        if not m:
+            continue
+
+        invoice_ref = m.group(1)
+        receipt_date = parse_pdf_date(path.name)
+        candidates.append(PdfCandidate(path=path, receipt_date=receipt_date, invoice_ref=invoice_ref))
+
+    if not candidates:
+        raise RuntimeError(f"Keine DomainFactory-PDF-Kandidaten in {pdf_dir} gefunden")
+
+    return candidates
+
+
+def extract_hp_candidate(path: Path) -> PdfCandidate | None:
+    text = extract_pdf_text(path)
+    normalized_text = " ".join(text.split())
+
+    amount_match = HP_TOTAL_AMOUNT_PATTERN.search(normalized_text)
+    billing_date_match = HP_BILLING_DATE_PATTERN.search(normalized_text)
+    if amount_match is None or billing_date_match is None:
+        return None
+
+    return PdfCandidate(
+        path=path,
+        receipt_date=parse_ddmmyy(billing_date_match.group(1)),
+        total_amount=parse_eur_amount(amount_match.group(1)),
+    )
+
+
+def collect_hp_candidates(pdf_dir: Path) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        candidate = extract_hp_candidate(path)
+        if candidate is not None:
+            candidates.append(candidate)
+
+    if not candidates:
+        raise RuntimeError(f"Keine HP-PDF-Kandidaten in {pdf_dir} gefunden")
+
+    return candidates
+
+
+def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
+    if vendor.slug == "aws":
+        return collect_aws_candidates(pdf_dir)
+    if vendor.slug == "hp":
+        return collect_hp_candidates(pdf_dir)
+    if vendor.slug == "google":
+        return collect_google_candidates(pdf_dir)
+    if vendor.slug == "hosting":
+        return collect_hosting_candidates(pdf_dir)
+    if vendor.slug == "domainfactory":
+        return collect_domainfactory_candidates(pdf_dir)
+
+    return collect_default_candidates(pdf_dir, vendor)
+
+
+def choose_best_candidate_by_date(transaction_date: date, candidates: list[PdfCandidate]) -> PdfCandidate:
+    monthly_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.receipt_date.year == transaction_date.year and candidate.receipt_date.month == transaction_date.month
+    ]
+
+    if not monthly_candidates:
+        raise RuntimeError(
+            f"Kein PDF für {transaction_date.strftime('%Y-%m')} gefunden"
+        )
+
+    return min(
+        monthly_candidates,
+        key=lambda candidate: abs((candidate.receipt_date - transaction_date).days),
+    )
+
+
+def aws_transaction_kind(record: TransactionRecord) -> str | None:
+    normalized_issuer = record.issuer_name.strip().lower()
+    if "amazon payments europe" in normalized_issuer:
+        return "marketplace"
+    if "amazon web services emea" in normalized_issuer:
+        return "service"
+    return None
+
+
+def choose_best_aws_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
+    expected_kind = aws_transaction_kind(record)
+    matching_candidates = [candidate for candidate in candidates if candidate.total_amount == record.amount]
+
+    if expected_kind is not None:
+        matching_candidates = [candidate for candidate in matching_candidates if candidate.kind == expected_kind]
+
+    if not matching_candidates:
+        raise RuntimeError(
+            "Kein AWS-PDF für "
+            f"{record.booking_date.strftime('%Y-%m-%d')} "
+            f"mit Betrag {record.amount} und Rechnungssteller {record.issuer_name} gefunden"
+        )
+
+    return min(
+        matching_candidates,
+        key=lambda candidate: abs((candidate.receipt_date - record.booking_date).days),
+    )
+
+
+def choose_best_google_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
+    matching_candidates = [candidate for candidate in candidates if candidate.total_amount == record.amount]
+
+    if not matching_candidates:
+        raise RuntimeError(
+            "Kein Google-PDF für "
+            f"{record.booking_date.strftime('%Y-%m-%d')} "
+            f"mit Betrag {record.amount} gefunden"
+        )
+
+    return min(
+        matching_candidates,
+        key=lambda candidate: abs((candidate.receipt_date - record.booking_date).days),
+    )
+
+
+def choose_best_hp_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
+    matching_candidates = [candidate for candidate in candidates if candidate.total_amount == record.amount]
+
+    if not matching_candidates:
+        raise RuntimeError(
+            "Kein HP-PDF für "
+            f"{record.booking_date.strftime('%Y-%m-%d')} "
+            f"mit Betrag {record.amount} gefunden"
+        )
+
+    return min(
+        matching_candidates,
+        key=lambda candidate: abs((candidate.receipt_date - record.booking_date).days),
+    )
+
+
+def choose_best_hosting_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
+    # Primär: Matching per Rechnungsnummer
+    if record.invoice_ref:
+        matching = [c for c in candidates if c.invoice_ref == record.invoice_ref]
+        if matching:
+            return matching[0]
+
+    # Fallback: Monatsgenaues Datums-Matching (z.B. PayPal-Transaktionen ohne Renr)
+    monthly = [
+        c for c in candidates
+        if c.receipt_date is not None
+        and c.receipt_date.year == record.booking_date.year
+        and c.receipt_date.month == record.booking_date.month
+    ]
+    if monthly:
+        return min(monthly, key=lambda c: abs((c.receipt_date - record.booking_date).days))
+
+    raise RuntimeError(
+        f"Kein hosting.de-PDF für Rechnungsnummer {record.invoice_ref or '(unbekannt)'} "
+        f"vom {record.booking_date.strftime('%Y-%m-%d')} gefunden"
+    )
+
+
+def choose_best_domainfactory_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
+    if record.invoice_ref:
+        matching = [candidate for candidate in candidates if candidate.invoice_ref == record.invoice_ref]
+        if matching:
+            return matching[0]
+
+    monthly = [
+        candidate
+        for candidate in candidates
+        if candidate.receipt_date is not None
+        and candidate.receipt_date.year == record.booking_date.year
+        and candidate.receipt_date.month == record.booking_date.month
+    ]
+    if monthly:
+        return min(monthly, key=lambda candidate: abs((candidate.receipt_date - record.booking_date).days))
+
+    raise RuntimeError(
+        f"Kein DomainFactory-PDF für Rechnungsnummer {record.invoice_ref or '(unbekannt)'} "
+        f"vom {record.booking_date.strftime('%Y-%m-%d')} gefunden"
+    )
+
+
+def match_pdfs_to_transactions(vendor: VendorRule, records: list[TransactionRecord], candidates: list[PdfCandidate]) -> list[Path]:
+    if vendor.slug == "aws":
+        remaining_candidates = list(candidates)
+        matched_paths: list[Path] = []
+        for record in records:
+            candidate = choose_best_aws_candidate(record, remaining_candidates)
+            remaining_candidates.remove(candidate)
+            matched_paths.append(candidate.path)
+        return matched_paths
+
+    if vendor.slug == "hp":
+        remaining_candidates = list(candidates)
+        matched_paths: list[Path] = []
+        for record in records:
+            candidate = choose_best_hp_candidate(record, remaining_candidates)
+            remaining_candidates.remove(candidate)
+            matched_paths.append(candidate.path)
+        return matched_paths
+
+    if vendor.slug == "google":
+        remaining_candidates = list(candidates)
+        matched_paths: list[Path] = []
+        for record in records:
+            candidate = choose_best_google_candidate(record, remaining_candidates)
+            remaining_candidates.remove(candidate)
+            matched_paths.append(candidate.path)
+        return matched_paths
+
+    if vendor.slug == "hosting":
+        remaining_candidates = list(candidates)
+        matched_paths = []
+        for record in records:
+            candidate = choose_best_hosting_candidate(record, remaining_candidates)
+            remaining_candidates.remove(candidate)
+            matched_paths.append(candidate.path)
+        return matched_paths
+
+    if vendor.slug == "domainfactory":
+        remaining_candidates = list(candidates)
+        matched_paths = []
+        for record in records:
+            candidate = choose_best_domainfactory_candidate(record, remaining_candidates)
+            remaining_candidates.remove(candidate)
+            matched_paths.append(candidate.path)
+        return matched_paths
+
+    return [choose_best_candidate_by_date(record.booking_date, candidates).path for record in records]
+
+
+def copy_unique_pdfs(target_dir: Path, pdfs: list[Path]) -> list[Path]:
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    copied_paths: list[Path] = []
+    for source_path in sorted(set(pdfs)):
+        destination_path = target_dir / source_path.name
+        shutil.copy2(source_path, destination_path)
+        copied_paths.append(destination_path)
+
+    return copied_paths
+
+
+def main() -> None:
+    ensure_project_venv()
+
+    try:
+        year, month, vendor = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent
+    csv_path = transactions_csv_path(repo_root, year, month, vendor)
+    pdf_dir = app_data_dir(repo_root, vendor)
+    target_dir = staging_dir(repo_root, year, month, vendor)
+
+    if not csv_path.is_file():
+        print(f"Transaktionsdatei nicht gefunden: {csv_path}")
+        sys.exit(1)
+
+    if not pdf_dir.is_dir():
+        print(f"PDF-Quellordner nicht gefunden: {pdf_dir}")
+        sys.exit(1)
+
+    try:
+        transaction_records = read_transaction_records(csv_path, vendor)
+        candidates = collect_candidates(pdf_dir, vendor)
+        matched_pdfs = match_pdfs_to_transactions(vendor, transaction_records, candidates)
+        meta_entries = [{"billing_filename": matched_pdf.name, "type": "incoming"} for matched_pdf in matched_pdfs]
+        copied_paths = copy_unique_pdfs(target_dir, matched_pdfs)
+        meta_path = write_meta_entries(target_dir, meta_entries)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    for path in copied_paths:
+        print(path)
+    print(meta_path)
+
+
+if __name__ == "__main__":
+    main()

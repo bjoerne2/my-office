@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+from typing import Any
+
+from python.args import validate_year_month
+
+DATEV_DIRNAME = "DATEV Unternehmen Online"
+RECHNUNGSEINGANG_DIRNAME = "Rechnungseingang"
+RECHNUNGSAUSGANG_DIRNAME = "Rechnungsausgang"
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if Path(sys.executable).resolve() == venv_python.resolve():
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+ensure_project_venv()
+
+
+def usage() -> str:
+    return "Usage: copy_datev_rechnungseingang <year> <month>"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int]:
+    if len(argv) != 2:
+        raise ValueError(usage())
+
+    return validate_year_month(argv[0], argv[1], example="2026 01")
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def staging_month_dir(root: Path, year: int, month: int) -> Path:
+    return root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}"
+
+
+def target_dir(month_dir: Path, entry_type: str) -> Path:
+    if entry_type == "outgoing":
+        return month_dir / DATEV_DIRNAME / RECHNUNGSAUSGANG_DIRNAME
+    return month_dir / DATEV_DIRNAME / RECHNUNGSEINGANG_DIRNAME
+
+
+def read_meta_entries(path: Path) -> list[dict[str, Any]]:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Ungültige meta.json: {path}") from exc
+
+    if not isinstance(data, list):
+        raise RuntimeError(f"meta.json hat kein Listenformat: {path}")
+
+    entries: list[dict[str, Any]] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            raise RuntimeError(f"meta.json enthält ungültigen Eintrag: {path}")
+        entries.append(entry)
+    return entries
+
+
+def vendor_name_for_meta(meta_path: Path, month_dir: Path) -> str | None:
+    try:
+        relative = meta_path.parent.relative_to(month_dir)
+    except ValueError:
+        return None
+
+    if not relative.parts:
+        return None
+
+    vendor = relative.parts[0]
+    if vendor == DATEV_DIRNAME:
+        return None
+
+    return vendor
+
+
+def collect_jobs(month_dir: Path, year: int, month: int) -> list[tuple[Path, Path]]:
+    jobs: list[tuple[Path, Path]] = []
+
+    for meta_path in sorted(month_dir.glob("**/meta.json")):
+        vendor = vendor_name_for_meta(meta_path, month_dir)
+        if vendor is None:
+            continue
+
+        entries = read_meta_entries(meta_path)
+        for entry in entries:
+            entry_type = entry.get("type")
+            if not isinstance(entry_type, str) or entry_type not in {"incoming", "outgoing"}:
+                raise RuntimeError(f"type fehlt oder ist ungültig in {meta_path}")
+
+            merged_filename = entry.get("merged_filename")
+            if not isinstance(merged_filename, str) or not merged_filename.strip():
+                continue
+
+            source_path = meta_path.parent / merged_filename.strip()
+            if not source_path.is_file():
+                raise RuntimeError(f"Datei aus meta.json nicht gefunden: {source_path}")
+
+            destination_dir = target_dir(month_dir, entry_type)
+            destination_name = f"{year:04d}_{month:02d}_{vendor}__{source_path.name}"
+            jobs.append((source_path, destination_dir / destination_name))
+
+    return jobs
+
+
+def deduplicate_jobs(jobs: list[tuple[Path, Path]]) -> list[tuple[Path, Path]]:
+    seen: set[tuple[Path, Path]] = set()
+    deduplicated: list[tuple[Path, Path]] = []
+
+    for source, destination in jobs:
+        key = (source, destination)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated.append((source, destination))
+
+    return deduplicated
+
+
+def ensure_no_destination_conflicts(jobs: list[tuple[Path, Path]]) -> None:
+    destinations: dict[Path, Path] = {}
+    for source, destination in jobs:
+        existing_source = destinations.get(destination)
+        if existing_source is not None and existing_source != source:
+            raise RuntimeError(
+                f"Zielkonflikt: {destination} würde aus {existing_source} und {source} kopiert werden"
+            )
+        destinations[destination] = source
+
+
+def perform_copy(jobs: list[tuple[Path, Path]]) -> None:
+    for source, destination in jobs:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        print(destination)
+
+
+def main() -> None:
+    try:
+        year, month = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    month_dir = staging_month_dir(repo_root(), year, month)
+    if not month_dir.is_dir():
+        print(f"Staging-Verzeichnis nicht gefunden: {month_dir}")
+        sys.exit(1)
+
+    try:
+        jobs = collect_jobs(month_dir, year, month)
+        jobs = deduplicate_jobs(jobs)
+        ensure_no_destination_conflicts(jobs)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    if not jobs:
+        print("Keine merged_filename-Dateien zum Kopieren gefunden.")
+        return
+
+    perform_copy(jobs)
+
+
+if __name__ == "__main__":
+    main()
+

@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+from typing import Any
+
+from python.args import validate_year_month
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if Path(sys.executable).resolve() == venv_python.resolve():
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+ensure_project_venv()
+
+CONFIG_FILENAME = ".my-office.local.json"
+CONFIG_KEY = "documents_export_dir"
+
+
+def usage() -> str:
+    return "Usage: copy_staging_documents <year> <month> [--dry-run]"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, bool]:
+    if len(argv) not in (2, 3):
+        raise ValueError(usage())
+
+    year, month = validate_year_month(argv[0], argv[1], example="2026 01")
+    dry_run = False
+
+    if len(argv) == 3:
+        if argv[2] != "--dry-run":
+            raise ValueError(f"Unbekannte Option: {argv[2]}\n{usage()}")
+        dry_run = True
+
+    return year, month, dry_run
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def config_path(root: Path) -> Path:
+    return root / CONFIG_FILENAME
+
+
+def load_config(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise RuntimeError(
+            f"Konfigurationsdatei nicht gefunden: {path}. Bitte aus my-office.local.example.json ableiten."
+        )
+
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Konfigurationsdatei ungültig: {path}") from exc
+
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Konfigurationsdatei hat ungültiges Format: {path}")
+
+    return data
+
+
+def export_target_dir(config: dict[str, Any]) -> Path:
+    value = config.get(CONFIG_KEY)
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(f"Konfigurationsschlüssel fehlt oder ist leer: {CONFIG_KEY}")
+
+    return Path(value).expanduser()
+
+
+def staging_root(root: Path) -> Path:
+    return root / "tmp" / "staging"
+
+
+def staging_month_dir(root: Path, year: int, month: int) -> Path:
+    return staging_root(root) / f"{year:04d}" / f"{month:02d}"
+
+
+def read_meta_entries(path: Path) -> list[dict[str, Any]]:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Ungültige meta.json: {path}") from exc
+
+    if not isinstance(data, list):
+        raise RuntimeError(f"meta.json hat kein Listenformat: {path}")
+
+    entries: list[dict[str, Any]] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            raise RuntimeError(f"meta.json enthält ungültigen Eintrag: {path}")
+        entries.append(entry)
+    return entries
+
+
+def vendor_dir_name(path: Path, staging: Path) -> str | None:
+    try:
+        relative = path.relative_to(staging)
+    except ValueError:
+        return None
+
+    parts = relative.parts
+    if len(parts) < 1:
+        return None
+
+    vendor = parts[0]
+    if not vendor:
+        return None
+
+    return vendor
+
+
+def collect_copy_jobs(staging: Path, target_base: Path, year: int, month: int) -> list[tuple[Path, Path]]:
+    jobs: list[tuple[Path, Path]] = []
+
+    for meta_path in sorted(staging.glob("**/meta.json")):
+        parent = meta_path.parent
+        vendor = vendor_dir_name(parent, staging)
+        if vendor is None:
+            continue
+
+        target_dir = target_base / f"{year:04d}" / f"{month:02d}" / vendor
+        entries = read_meta_entries(meta_path)
+
+        jobs.append((meta_path, target_dir / meta_path.name))
+
+        for entry in entries:
+            for key in ("billing_filename", "merged_filename"):
+                filename = entry.get(key)
+                if not isinstance(filename, str) or not filename.strip():
+                    continue
+
+                source_path = parent / filename.strip()
+                if not source_path.is_file():
+                    raise RuntimeError(f"Datei aus meta.json nicht gefunden: {source_path}")
+
+                destination_path = target_dir / source_path.name
+                jobs.append((source_path, destination_path))
+
+    return jobs
+
+
+def deduplicate_jobs(jobs: list[tuple[Path, Path]]) -> list[tuple[Path, Path]]:
+    seen: set[tuple[Path, Path]] = set()
+    deduplicated: list[tuple[Path, Path]] = []
+
+    for source, destination in jobs:
+        key = (source, destination)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated.append((source, destination))
+
+    return deduplicated
+
+
+def ensure_no_destination_conflicts(jobs: list[tuple[Path, Path]]) -> None:
+    destinations: dict[Path, Path] = {}
+    for source, destination in jobs:
+        existing_source = destinations.get(destination)
+        if existing_source is not None and existing_source != source:
+            raise RuntimeError(
+                f"Zielkonflikt: {destination} würde aus {existing_source} und {source} kopiert werden"
+            )
+        destinations[destination] = source
+
+
+def perform_copy(jobs: list[tuple[Path, Path]], dry_run: bool) -> None:
+    for source, destination in jobs:
+        print(f"{source} -> {destination}")
+        if dry_run:
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+
+def main() -> None:
+    try:
+        year, month, dry_run = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    root = repo_root()
+    config_file = config_path(root)
+    staging = staging_month_dir(root, year, month)
+
+    if not staging.is_dir():
+        print(f"Staging-Verzeichnis nicht gefunden: {staging}")
+        sys.exit(1)
+
+    try:
+        config = load_config(config_file)
+        target_base = export_target_dir(config)
+        jobs = collect_copy_jobs(staging, target_base, year, month)
+        jobs = deduplicate_jobs(jobs)
+        ensure_no_destination_conflicts(jobs)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    if not jobs:
+        print("Keine Dateien zum Kopieren gefunden.")
+        return
+
+    perform_copy(jobs, dry_run)
+
+
+if __name__ == "__main__":
+    main()
+

@@ -4,26 +4,43 @@ Dieses Repository enthält kleine Office-Automatisierungen.
 
 Aktuell enthalten:
 
-- `monkkee/process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
+- `process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
+- `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSVs nach `tmp/staging/<jahr>/<monat>/transactions.csv` sowie `tmp/staging/<jahr>/<monat>/transactions_personal.csv`.
+- `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
+- `select_personal_transaction`: Wählt genau eine persönliche Buchung aus `transactions_personal.csv` aus und übernimmt sie in einen Zielordner.
+- `ignore_transactions`: Verschiebt fest definierte, bewusst zu ignorierende Monatsumsätze nach `tmp/staging/<jahr>/<monat>/Ignored/transactions.csv`.
+- `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data/<Rechnungssteller>` und kopiert sie direkt in den Staging-Monatsordner.
+- `create_transaction_pdfs`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
+- `create_single_transaction_pdf`: Erzeugt aus genau einer Buchung in einem manuell vorbereiteten Ordner ein Buchungs-PDF und pflegt `meta.json`.
+- `detect_single_receipt_pdf`: Sucht in einem manuell vorbereiteten Ordner das einzelne Rechnungs-PDF und schreibt dessen Dateinamen nach `meta.json`.
+- `merge_receipt_and_transaction_pdfs`: Führt Rechnungs-PDFs und Kontobeleg-PDFs paarweise zu kombinierten PDFs zusammen.
+- `merge_single_receipt_and_transaction_pdf`: Führt in einem manuell vorbereiteten Ordner genau ein Rechnungs-PDF mit dem erzeugten Buchungs-PDF zusammen und pflegt `meta.json`.
+- `process_single_transaction`: Führt den manuellen Einzelprozess (Rechnung erkennen, Buchungs-PDF erzeugen, zusammenführen) für einen Ordner aus.
+- `process_vendor_month`: Führt alle Schritte für einen Anbieter und Monat als Gesamt-Workflow aus.
+- `process_month`: Führt den Gesamtprozess für alle bekannten Anbieter eines Monats aus.
+- `copy_staging_documents`: Kopiert Rechnungs-, kombinierte PDFs und `meta.json` aus `tmp/staging` in ein lokal konfiguriertes Zielverzeichnis.
+- `copy_datev_rechnungseingang`: Kopiert kombinierte PDFs aus `merged_filename` nach `tmp/staging/<jahr>/<monat>/DATEV Unternehmen Online/Rechnungseingang/`.
+- `create_paypal_income_pdf`: Erstellt aus `transactions_paypal.csv` ein Einnahmen-PDF für monkkee und pflegt den `PayPal`-Ordner inkl. `meta.json`.
+- `check_documents_export`: Prüft das Dokumentenzielverzeichnis für einen Monat gegen eine Standardliste von Anbieterordnern und listet vorhandene kombinierte PDFs auf.
+- `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
 
 - Python ≥ 3.10 (z.B. installiert über Homebrew)
 
+## Gemeinsame Python-Hilfsmodule
+
+Wiederverwendbare Python-Helfer liegen unter `python/`, z. B.:
+
+- `python/args.py` für Argument-Validierung
+- `python/vendors.py` für Anbieter-/Namenszuordnungen
+- `python/meta.py` für zentrales Lesen/Schreiben von `meta.json`
+
 ## Python Installation (Homebrew)
 
 ```bash
 brew install python
-```
-
-## Python Update (Homebrew)
-
-```bash
-brew update
-brew upgrade python
-```
-
-## Virtuelle Umgebung einrichten
+  "documents_export_dir": "~/Documents/Buchfuehrung"
 
 Die Python-Abhängigkeiten werden projektlokal in `/.venv` installiert.
 
@@ -35,7 +52,7 @@ python3 -m venv .venv
 ```
 
 Danach ist keine manuelle Aktivierung pro Shell-Session nötig.
-`./monkkee/process_paypal_report` verwendet automatisch `/.venv`, wenn vorhanden.
+`./process_paypal_report` sowie die Python-Skripte im Repository verwenden automatisch `/.venv`, wenn vorhanden.
 
 ## Abhängigkeiten aktualisieren
 
@@ -46,10 +63,284 @@ Wenn neue Pakete hinzukommen:
 ./.venv/bin/python -m pip freeze > requirements.txt
 ```
 
+## Lokale Projektkonfiguration
+
+Für lokale, nicht versionierte Pfade kann im Projektverzeichnis eine Datei
+`.my-office.local.json` angelegt werden. Eine Vorlage liegt in
+`my-office.local.example.json`.
+
+Beispiel:
+
+```json
+{
+  "documents_export_dir": "~/Documents/Buchfuehrung",
+  "documents_export_expected_dirs": [
+    "AWS",
+    "DomainFactory",
+    "GitHub",
+    "Google",
+    "hosting.de",
+    "HP Instant Ink",
+    "PayPal"
+  ]
+}
+```
+
 ## Verwendung
 
 ```bash
-./monkkee/process_paypal_report <report.csv>
+./process_paypal_report <report.csv>
 ```
 
 Die Ausgabe (`*_processed.xlsx`) wird im selben Verzeichnis wie die Eingabedatei erzeugt.
+
+### MoneyMoney Monats-Export
+
+```bash
+./export_transactions 2026 05
+```
+
+Die Ausgabe wird nach `tmp/staging/2026/05/transactions.csv` verschoben.
+Zusätzlich wird der Export des privaten Kontos `Girokonto` nach `tmp/staging/2026/05/transactions_personal.csv` geschrieben.
+
+### MoneyMoney Rechnungssteller-Extraktion
+
+```bash
+./extract_transactions 2026 01 github
+```
+
+Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
+
+### Persönliche Buchung gezielt übernehmen
+
+```bash
+./select_personal_transaction 2026 01 "Inwx GmbH" GitHub
+```
+
+Das Skript sucht in `tmp/staging/2026/01/transactions_personal.csv` nach genau einer Zeile mit dem angegebenen Teilstring
+und übernimmt diese in `tmp/staging/2026/01/<Zielordner>/transactions.csv`. Wenn mehrere Zeilen passen, werden diese als CSV
+ausgegeben und das Skript endet mit einer Fehlermeldung.
+
+### MoneyMoney Ignorierliste erzeugen
+
+```bash
+./ignore_transactions 2026 01
+```
+
+Das Skript liest `tmp/staging/2026/01/transactions.csv`, filtert fest definierte ignorierbare Umsätze
+(aktuell z. B. Zeilen mit `Abbuchung vom PayPal-Konto`) und schreibt sie nach
+`tmp/staging/2026/01/Ignored/transactions.csv`.
+
+### MoneyMoney PDF-Matching
+
+```bash
+./match_receipts 2026 01 github
+```
+
+Die passenden PDFs werden anbieterspezifisch gematcht, direkt in den Staging-Ordner kopiert
+und als Eintragsliste in `meta.json` abgelegt. Für GitHub erfolgt das Matching über den Dateinamen,
+für AWS über Betrag und Inhalte der PDF-Dateien, für `hosting.de` und `DomainFactory` primär
+über Rechnungsnummern aus Umsatzdaten und PDF-Dateinamen.
+
+### Nicht verarbeitete Transaktionen ausgeben
+
+```bash
+./unprocessed_transactions 2026 01
+```
+
+Das Skript gibt die verbleibenden, noch nicht verarbeiteten Transaktionen als CSV auf der Standardausgabe aus.
+Dabei werden alle Unterordner mit einer `transactions.csv` berücksichtigt, also auch `Ignored/`.
+
+### MoneyMoney Transaktions-PDF erzeugen
+
+```bash
+./create_transaction_pdfs 2026 01 github
+```
+
+Das Skript liest `tmp/staging/2026/01/GitHub/transactions.csv`, erzeugt pro Zeile ein PDF mit einer einfachen
+Schlüssel/Wert-Tabelle direkt in `tmp/staging/2026/01/GitHub/` und ergänzt die zugehörigen Meta-Einträge.
+Wenn in den Umsatzdaten eine Kontobezeichnung vorhanden ist, wird sie als oberste Zeile in der Buchungs-Tabelle angezeigt.
+
+### Einzelnes Buchungs-PDF in manuellem Ordner erzeugen
+
+```bash
+./create_single_transaction_pdf tmp/staging/2026/01/MeinOrdner
+```
+
+Der Zielordner (relativ zum Repository oder absolut) muss eine `transactions.csv` mit genau einer Buchung enthalten. Das Skript erzeugt daraus
+ein einzelnes Buchungs-PDF im selben Ordner und legt bzw. aktualisiert die `meta.json`.
+
+Wenn bereits ein Rechnungsname in `meta.json` hinterlegt ist, wird dieser zusätzlich im Buchungs-PDF angezeigt.
+
+### Einzelnes Rechnungs-PDF in `meta.json` erkennen
+
+```bash
+./detect_single_receipt_pdf tmp/staging/2026/01/MeinOrdner
+```
+
+Der Zielordner (relativ zum Repository oder absolut) muss genau ein Rechnungs-PDF enthalten.
+Das Skript schreibt dessen Dateinamen als `billing_filename` nach `meta.json`.
+
+### Rechnung und Buchung zusammenführen
+
+```bash
+./merge_receipt_and_transaction_pdfs 2026 01 github
+```
+
+Das Skript führt die in `meta.json` zugeordneten Rechnungs- und Kontobeleg-PDFs im Ordner
+`tmp/staging/2026/01/GitHub/` paarweise zusammen und schreibt Ausgabedateien auf Basis des Rechnungsdateinamens.
+
+### Einzelne manuelle Rechnung und Buchung zusammenführen
+
+```bash
+./merge_single_receipt_and_transaction_pdf tmp/staging/2026/01/MeinOrdner
+```
+
+Der Zielordner (relativ zum Repository oder absolut) muss genau ein Rechnungs-PDF sowie ein zuvor erzeugtes Buchungs-PDF enthalten.
+Das Skript aktualisiert die `meta.json` und erzeugt ein kombiniertes PDF auf Basis des Rechnungsdateinamens.
+
+### Manuellen Einzelprozess vollständig ausführen
+
+```bash
+./process_single_transaction tmp/staging/2026/01/MeinOrdner
+```
+
+Das Skript führt nacheinander aus:
+
+1. `detect_single_receipt_pdf`
+2. `create_single_transaction_pdf`
+3. `merge_single_receipt_and_transaction_pdf`
+
+### Gesamt-Workflow für einen Anbieter
+
+```bash
+./process_vendor_month 2026 01 github
+```
+
+Der Workflow führt nacheinander aus:
+
+1. `extract_transactions`
+2. `match_receipts`
+3. `create_transaction_pdfs`
+4. `merge_receipt_and_transaction_pdfs`
+
+### Gesamt-Workflow für alle Anbieter eines Monats
+
+```bash
+./process_month 2026 01
+```
+
+Das Skript führt zuerst `export_transactions` genau einmal aus und ruft anschließend
+`create_paypal_income_pdf <jahr> <monat>` sowie danach
+`process_vendor_month <jahr> <monat> <anbieter>` für alle bekannten Anbieter auf.
+Anbieter ohne passende Monatsbuchungen werden übersprungen.
+
+Wenn die Exportdateien bereits vorhanden sind und kein neuer MoneyMoney-Export erfolgen soll:
+
+```bash
+./process_month 2026 01 --skip-export
+```
+
+### PDFs aus `tmp/staging` in ein Dokumentenziel exportieren
+
+Vorher die lokale Zielkonfiguration in `.my-office.local.json` setzen.
+
+Dry-Run:
+
+```bash
+./copy_staging_documents 2026 01 --dry-run
+```
+
+Echter Kopiervorgang:
+
+```bash
+./copy_staging_documents 2026 01
+```
+
+Das Skript durchsucht den Monatsordner `tmp/staging/<Jahr>/<Monat>` nach `meta.json` und kopiert
+für alle Einträge die Dateien aus `billing_filename` und `merged_filename` sowie die jeweilige
+`meta.json` nach `<Zielordner>/<Jahr>/<Monat>/<Anbieter>/`.
+
+### Dokumentenzielverzeichnis für einen Monat prüfen
+
+```bash
+./check_documents_export 2026 01
+```
+
+Das Skript prüft `<documents_export_dir>/<Jahr>/<Monat>` und listet:
+
+- gefundene Anbieterordner mit `✅`, wenn sie in der zentralen Anbieterdefinition aus `python/vendors.py`
+  (plus `PayPal`) enthalten sind
+- zusätzliche Anbieterordner mit `➕`
+- fehlende erwartete Anbieterordner mit `❌`
+
+Unter jedem gefundenen Verzeichnis werden eingerückt alle Dokumente mit Suffix
+`-beleg_und_buchung.pdf` ausgegeben.
+
+### Kombinierte PDFs für DATEV bereitstellen
+
+```bash
+./copy_datev_rechnungseingang 2026 01
+```
+
+Das Skript durchsucht `tmp/staging/<Jahr>/<Monat>` nach `meta.json` und kopiert alle gefundenen
+`merged_filename`-Dateien je nach Metadatentyp nach
+`tmp/staging/<Jahr>/<Monat>/DATEV Unternehmen Online/Rechnungseingang/` oder
+`tmp/staging/<Jahr>/<Monat>/DATEV Unternehmen Online/Rechnungsausgang/`.
+
+Die Zieldateien werden dabei so benannt:
+
+```text
+<Anbieter>__<merged_filename>
+```
+
+Regel:
+
+- `type: incoming` → `Rechnungseingang`
+- `type: outgoing` → `Rechnungsausgang`
+
+### PayPal-Einnahmen-PDF für monkkee erzeugen
+
+```bash
+./create_paypal_income_pdf 2026 01
+```
+
+Das Skript liest `tmp/staging/<Jahr>/<Monat>/transactions_paypal.csv`, summiert alle Zeilen mit
+`Umsatzart: Payment` sowie alle Zeilen mit `Umsatzart: Fee` und erzeugt daraus im Ordner
+`tmp/staging/<Jahr>/<Monat>/PayPal/` die Datei `Einnahmen monkkee.pdf`.
+
+Die zugehörige `meta.json` wird mit einem Eintrag gepflegt, bei dem `billing_filename` und
+`merged_filename` beide auf `Einnahmen monkkee.pdf` gesetzt werden. Zusätzlich wird
+`type: outgoing` gespeichert.
+
+## rclone / Google Drive Sync
+
+Installation unter macOS:
+
+```bash
+brew update
+brew install rclone
+```
+
+Google Drive als Remote einrichten:
+
+```bash
+rclone config
+```
+
+Dabei z.B. `gdrive` als Remote anlegen und den Zielordner direkt über `root_folder_id` fest verdrahten.
+Danach startet der Download-Sync von diesem Remote-Root nach lokal so:
+
+```bash
+cd /Users/bjoerne/Source/my-office
+./sync_app_scripts_data
+```
+
+Falls dein Remote anders heißt:
+
+```bash
+cd /Users/bjoerne/Source/my-office
+RCLONE_REMOTE_NAME="meinremote" ./sync_app_scripts_data
+```
+
+Hinweis: Das Skript verwendet `rclone sync` von **remote nach lokal**. Lokale Dateien, die remote nicht existieren, werden dabei entfernt.

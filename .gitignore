@@ -1,2 +1,6 @@
+.DS_Store
 .idea
 .venv/
+.my-office.local.json
+tmp/
+__pycache__/

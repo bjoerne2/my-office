@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import csv
+import os
+import sys
+from pathlib import Path
+
+from python.args import validate_year_month
+ACCOUNT_LABEL_COLUMN = "Kontobezeichnung"
+PERSONAL_TRANSACTIONS_FILENAME = "transactions_personal.csv"
+TARGET_TRANSACTIONS_FILENAME = "transactions.csv"
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if Path(sys.executable).resolve() == venv_python.resolve():
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+def usage() -> str:
+    return "Usage: select_personal_transaction <year> <month> <teilstring> <zielordner>"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int, str, str]:
+    if len(argv) != 4:
+        raise ValueError(usage())
+
+    year, month = validate_year_month(argv[0], argv[1], example="2026 01")
+    transaction_substring = argv[2].strip()
+    target_dir = argv[3].strip()
+
+    if not transaction_substring:
+        raise ValueError("Teilstring darf nicht leer sein")
+    if not target_dir:
+        raise ValueError("Zielordner darf nicht leer sein")
+
+    return year, month, transaction_substring, target_dir
+
+
+def month_dir(repo_root: Path, year: int, month: int) -> Path:
+    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}"
+
+
+def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
+    return month_dir(repo_root, year, month) / PERSONAL_TRANSACTIONS_FILENAME
+
+
+def resolve_target_dir(repo_root: Path, year: int, month: int, target_dir_value: str) -> Path:
+    target_dir = Path(target_dir_value)
+    if target_dir.is_absolute():
+        raise ValueError("Zielordner muss relativ zum Monats-Staging-Ordner angegeben werden")
+
+    if any(part == ".." for part in target_dir.parts):
+        raise ValueError("Zielordner darf nicht außerhalb des Monats-Staging-Ordners liegen")
+
+    return month_dir(repo_root, year, month) / target_dir
+
+
+def target_csv_path(target_dir: Path) -> Path:
+    return target_dir / TARGET_TRANSACTIONS_FILENAME
+
+
+def read_csv_rows(path: Path) -> tuple[list[str], list[list[str]]]:
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle, delimiter=";")
+        try:
+            header = next(reader)
+        except StopIteration as exc:
+            raise RuntimeError(f"Leere CSV-Datei: {path}") from exc
+
+        rows = [row for row in reader if row and any(cell.strip() for cell in row)]
+
+    return header, rows
+
+
+def row_matches_substring(row: list[str], transaction_substring: str) -> bool:
+    haystack = " ".join(cell.strip().lower() for cell in row)
+    return transaction_substring.lower() in haystack
+
+
+def find_matching_rows(rows: list[list[str]], transaction_substring: str) -> list[list[str]]:
+    return [row for row in rows if row_matches_substring(row, transaction_substring)]
+
+
+def merged_header(source_header: list[str], target_header: list[str] | None) -> list[str]:
+    if not target_header:
+        if ACCOUNT_LABEL_COLUMN in source_header:
+            return [ACCOUNT_LABEL_COLUMN, *[label for label in source_header if label != ACCOUNT_LABEL_COLUMN]]
+        return list(source_header)
+
+    combined = [label for label in target_header if label != ACCOUNT_LABEL_COLUMN]
+    for label in source_header:
+        if label != ACCOUNT_LABEL_COLUMN and label not in combined:
+            combined.append(label)
+    if ACCOUNT_LABEL_COLUMN in source_header or ACCOUNT_LABEL_COLUMN in target_header:
+        return [ACCOUNT_LABEL_COLUMN, *combined]
+    return combined
+
+
+def project_row(row: list[str], source_header: list[str], output_header: list[str]) -> list[str]:
+    row_by_label = {
+        label: (row[index] if index < len(row) else "")
+        for index, label in enumerate(source_header)
+    }
+    return [row_by_label.get(label, "") for label in output_header]
+
+
+def write_csv(path: Path, header: list[str], rows: list[list[str]]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle, delimiter=";", lineterminator="\n")
+        writer.writerow(header)
+        writer.writerows(rows)
+
+    return path
+
+
+def print_matching_rows(header: list[str], rows: list[list[str]]) -> None:
+    writer = csv.writer(sys.stdout, delimiter=";", lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(rows)
+
+
+def main() -> None:
+    ensure_project_venv()
+
+    try:
+        year, month, transaction_substring, target_dir_value = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent
+    src_path = source_csv_path(repo_root, year, month)
+    try:
+        target_dir = resolve_target_dir(repo_root, year, month, target_dir_value)
+    except ValueError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+    dst_path = target_csv_path(target_dir)
+
+    if not src_path.is_file():
+        print(f"Quelldatei nicht gefunden: {src_path}")
+        sys.exit(1)
+
+    try:
+        source_header, source_rows = read_csv_rows(src_path)
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    matches = find_matching_rows(source_rows, transaction_substring)
+    if not matches:
+        print(f"Fehler: Keine persönliche Transaktion mit Teilstring gefunden: {transaction_substring}")
+        sys.exit(1)
+
+    if len(matches) > 1:
+        print(f"Fehler: Mehrere persönliche Transaktionen mit Teilstring gefunden: {transaction_substring}")
+        print_matching_rows(source_header, matches)
+        sys.exit(1)
+
+    selected_row = matches[0]
+
+    existing_header: list[str] | None = None
+    existing_rows: list[list[str]] = []
+    if dst_path.is_file():
+        try:
+            existing_header, existing_rows = read_csv_rows(dst_path)
+        except RuntimeError as exc:
+            print(f"Fehler: {exc}")
+            sys.exit(1)
+
+    output_header = merged_header(source_header, existing_header)
+    normalized_existing_rows = [project_row(row, existing_header or output_header, output_header) for row in existing_rows]
+    normalized_selected_row = project_row(selected_row, source_header, output_header)
+
+    if normalized_selected_row not in normalized_existing_rows:
+        normalized_existing_rows.append(normalized_selected_row)
+
+    output_path = write_csv(dst_path, output_header, normalized_existing_rows)
+    print(output_path)
+
+
+if __name__ == "__main__":
+    main()
+
+

@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Synchronisiert tmp/app_scripts_data unidirektional von einem Google-Drive-Ordner nach lokal via rclone sync.
+
+Verwendung:
+  sync_app_scripts_data [weitere-rclone-optionen]
+
+Beispiele:
+  ./sync_app_scripts_data
+  RCLONE_REMOTE_NAME="gdrive" ./sync_app_scripts_data
+  ./sync_app_scripts_data --dry-run
+
+Hinweise:
+- Verwendet den Root des konfigurierten rclone-Remotes (z.B. per root_folder_id festgelegt).
+- Standard-Remote ist "gdrive"; bei anderem Namen RCLONE_REMOTE_NAME setzen.
+- Lokale Dateien, die remote nicht existieren, werden durch "rclone sync" geloescht.
+- Weitere Optionen werden direkt an "rclone sync" durchgereicht.
+EOF
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$SCRIPT_DIR"
+LOCAL_DIR="$REPO_ROOT/tmp/app_scripts_data"
+DEFAULT_REMOTE_NAME="gdrive"
+
+remote_name="${RCLONE_REMOTE_NAME:-$DEFAULT_REMOTE_NAME}"
+remote_path="${remote_name}:"
+extra_args=()
+
+while (($# > 0)); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      extra_args+=("$@")
+      break
+      ;;
+    -* )
+      extra_args+=("$1")
+      shift
+      ;;
+    *)
+      echo "Fehler: Unerwartetes Positionsargument: $1" >&2
+      echo >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z "$remote_name" ]]; then
+  echo "Fehler: Der rclone-Remote-Name ist leer." >&2
+  echo >&2
+  usage >&2
+  exit 1
+fi
+
+mkdir -p "$LOCAL_DIR"
+
+echo "Starte unidirektionalen Sync (remote -> lokal)"
+echo "  Lokal : $LOCAL_DIR"
+echo "  Remote: $remote_path"
+
+cmd=(
+  rclone sync "$remote_path" "$LOCAL_DIR"
+  --create-empty-src-dirs
+)
+
+if ((${#extra_args[@]} > 0)); then
+  cmd+=("${extra_args[@]}")
+fi
+
+if ! "${cmd[@]}"; then
+  echo "Sync fehlgeschlagen." >&2
+  exit 1
+fi
+
+echo "Fertig."
+
+
+
+
+

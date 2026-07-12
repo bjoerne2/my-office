@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import calendar
+import csv
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from python.args import validate_year_month
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if Path(sys.executable).resolve() == venv_python.resolve():
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+def usage() -> str:
+    return "Usage: export_transactions <year> <month>"
+
+
+ACCOUNT_EXPORTS = (
+    ("DKB-Business", "transactions.csv"),
+    ("Girokonto", "transactions_personal.csv"),
+    ("paypal@monkkee.com", "transactions_paypal.csv"),
+)
+ACCOUNT_LABEL_COLUMN = "Kontobezeichnung"
+
+
+def parse_year_month(argv: list[str]) -> tuple[int, int]:
+    if len(argv) != 2:
+        raise ValueError(usage())
+
+    return validate_year_month(argv[0], argv[1], example="2026 05")
+
+
+def month_bounds(year: int, month: int) -> tuple[str, str]:
+    last_day = calendar.monthrange(year, month)[1]
+    return f"{year:04d}-{month:02d}-01", f"{year:04d}-{month:02d}-{last_day:02d}"
+
+
+def run_export(script_path: Path, account_name: str, from_date: str, to_date: str) -> Path:
+    result = subprocess.run(
+        ["osascript", str(script_path), account_name, from_date, to_date],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        error_output = (result.stderr or result.stdout).strip()
+        raise RuntimeError(error_output or "AppleScript-Aufruf fehlgeschlagen")
+
+    output = result.stdout.strip()
+    if not output:
+        raise RuntimeError("MoneyMoney hat keinen Exportpfad zurückgegeben")
+
+    csv_path = Path(output)
+    if not csv_path.is_file():
+        raise RuntimeError(f"Exportierte CSV nicht gefunden: {csv_path}")
+
+    return csv_path
+
+
+def with_account_label(csv_path: Path, account_name: str) -> Path:
+    labeled_path = csv_path.with_name(f"{csv_path.stem}-labeled{csv_path.suffix}")
+
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as source_handle:
+        reader = csv.reader(source_handle, delimiter=";")
+        try:
+            header = next(reader)
+        except StopIteration as exc:
+            raise RuntimeError(f"Leere CSV-Datei: {csv_path}") from exc
+
+        source_header = [label for label in header if label != ACCOUNT_LABEL_COLUMN]
+        output_header = [ACCOUNT_LABEL_COLUMN, *source_header]
+
+        with labeled_path.open("w", encoding="utf-8", newline="") as target_handle:
+            writer = csv.writer(target_handle, delimiter=";", lineterminator="\n")
+            writer.writerow(output_header)
+
+            for row in reader:
+                row_by_label = {
+                    label: (row[index] if index < len(row) else "")
+                    for index, label in enumerate(header)
+                    if label != ACCOUNT_LABEL_COLUMN
+                }
+                writer.writerow([account_name, *[row_by_label.get(label, "") for label in source_header]])
+
+    csv_path.unlink()
+    return labeled_path
+
+
+def move_export(csv_path: Path, repo_root: Path, year: int, month: int, destination_name: str) -> Path:
+    destination_dir = repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}"
+    destination_dir.mkdir(parents=True, exist_ok=True)
+
+    destination_path = destination_dir / destination_name
+    if destination_path.exists():
+        destination_path.unlink()
+
+    shutil.move(str(csv_path), str(destination_path))
+    return destination_path
+
+
+def main() -> None:
+    ensure_project_venv()
+
+    try:
+        year, month = parse_year_month(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    from_date, to_date = month_bounds(year, month)
+
+    script_path = Path(__file__).resolve().parent / "applescript" / "transactions.applescript"
+    repo_root = Path(__file__).resolve().parent
+
+    if not script_path.is_file():
+        print(f"AppleScript nicht gefunden: {script_path}")
+        sys.exit(1)
+
+    try:
+        destination_paths: list[Path] = []
+        for account_name, destination_name in ACCOUNT_EXPORTS:
+            csv_path = run_export(script_path, account_name, from_date, to_date)
+            labeled_path = with_account_label(csv_path, account_name)
+            destination_paths.append(move_export(labeled_path, repo_root, year, month, destination_name))
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    for destination_path in destination_paths:
+        print(destination_path)
+
+
+if __name__ == "__main__":
+    main()
+
+

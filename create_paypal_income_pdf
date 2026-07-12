@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import csv
+import os
+import sys
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from pathlib import Path
+
+
+def ensure_project_venv() -> None:
+    """Automatically use the project venv when available."""
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent
+    venv_python = repo_root / ".venv" / "bin" / "python"
+
+    if not venv_python.is_file():
+        return
+
+    if os.path.abspath(sys.executable) == os.path.abspath(venv_python):
+        return
+
+    os.execv(str(venv_python), [str(venv_python), *sys.argv])
+
+
+ensure_project_venv()
+
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+except ModuleNotFoundError as exc:
+    if exc.name == "reportlab":
+        print(
+            "Fehler: Python-Paket 'reportlab' nicht gefunden. "
+            "Bitte die Projektumgebung mit './.venv/bin/python -m pip install -r requirements.txt' einrichten."
+        )
+        sys.exit(1)
+    raise
+
+from python.args import validate_year_month
+from python.meta import write_meta_entries
+
+PAYPAL_DIRNAME = "PayPal"
+PAYPAL_CSV_FILENAME = "transactions_paypal.csv"
+PDF_FILENAME = "Einnahmen monkkee.pdf"
+
+
+def usage() -> str:
+    return "Usage: create_paypal_income_pdf <year> <month>"
+
+
+def parse_args(argv: list[str]) -> tuple[int, int]:
+    if len(argv) != 2:
+        raise ValueError(usage())
+
+    return validate_year_month(argv[0], argv[1], example="2026 01")
+
+
+def month_dir(repo_root: Path, year: int, month: int) -> Path:
+    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}"
+
+
+def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
+    return month_dir(repo_root, year, month) / PAYPAL_CSV_FILENAME
+
+
+def output_dir(repo_root: Path, year: int, month: int) -> Path:
+    return month_dir(repo_root, year, month) / PAYPAL_DIRNAME
+
+
+def parse_eur_amount(value: str) -> Decimal:
+    normalized = value.strip()
+    if "." in normalized and "," in normalized:
+        normalized = normalized.replace(".", "").replace(",", ".")
+    elif "," in normalized:
+        normalized = normalized.replace(",", ".")
+
+    try:
+        return Decimal(normalized)
+    except InvalidOperation as exc:
+        raise RuntimeError(f"Ungültiger Betrag: {value}") from exc
+
+
+def read_paypal_sums(csv_path: Path) -> tuple[Decimal, Decimal]:
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle, delimiter=";")
+
+        try:
+            header = next(reader)
+        except StopIteration as exc:
+            raise RuntimeError(f"Leere CSV-Datei: {csv_path}") from exc
+
+        try:
+            purpose_index = header.index("Verwendungszweck")
+            amount_index = header.index("Betrag")
+        except ValueError as exc:
+            raise RuntimeError(f"Erwartete CSV-Spalten fehlen in {csv_path}") from exc
+
+        payment_sum = Decimal("0")
+        fee_sum = Decimal("0")
+
+        for row in reader:
+            if not row or not any(cell.strip() for cell in row):
+                continue
+            if max(purpose_index, amount_index) >= len(row):
+                raise RuntimeError(f"CSV-Zeile unvollständig: {row}")
+
+            purpose = row[purpose_index]
+            amount = parse_eur_amount(row[amount_index])
+
+            if any(
+                marker in purpose
+                for marker in (
+                    "Umsatzart: Fee",
+                    "Umsatzart: Fee reversal",
+                    "Umsatzart: Refunded fee",
+                )
+            ):
+                fee_sum += amount
+            elif any(
+                marker in purpose
+                for marker in (
+                    "Umsatzart: Payment",
+                    "Umsatzart: Recurring payment",
+                    "Umsatzart: Refund",
+                )
+            ):
+                payment_sum += amount
+            elif "Umsatzart: Transfer" in purpose:
+                continue
+            else:
+                raise RuntimeError(f"Unbekannte PayPal-Umsatzart in Zeile: {purpose}")
+
+    return payment_sum, fee_sum
+
+
+def format_eur(amount: Decimal) -> str:
+    quantized = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"{quantized:.2f}".replace(".", ",") + " EUR"
+
+
+def make_table(table_data: list[list[str]]) -> Table:
+    table = Table(table_data, colWidths=[70 * mm, 100 * mm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f0f0")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.black),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("LEADING", (0, 0), (-1, -1), 12),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return table
+
+
+def write_pdf(output_path: Path, payment_sum: Decimal, fee_sum: Decimal) -> None:
+    net_sum = payment_sum + fee_sum
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph("PayPal Einnahmen", styles["Title"]),
+        Spacer(1, 8 * mm),
+        make_table(
+            [
+                ["Umsatz", format_eur(payment_sum)],
+                ["PayPal-Gebühren", format_eur(fee_sum)],
+                ["Einnahmen", format_eur(net_sum)],
+            ]
+        ),
+    ]
+
+    document = SimpleDocTemplate(
+        str(output_path),
+        pagesize=A4,
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+        topMargin=15 * mm,
+        bottomMargin=15 * mm,
+        title="PayPal Einnahmen",
+    )
+    document.build(story)
+
+
+def main() -> None:
+    try:
+        year, month = parse_args(sys.argv[1:])
+    except ValueError as exc:
+        print(exc)
+        sys.exit(1)
+
+    repo_root = Path(__file__).resolve().parent
+    csv_path = source_csv_path(repo_root, year, month)
+    target_dir = output_dir(repo_root, year, month)
+    pdf_path = target_dir / PDF_FILENAME
+
+    if not csv_path.is_file():
+        print(f"Transaktionsdatei nicht gefunden: {csv_path}")
+        sys.exit(1)
+
+    try:
+        payment_sum, fee_sum = read_paypal_sums(csv_path)
+        write_pdf(pdf_path, payment_sum, fee_sum)
+        write_meta_entries(
+            target_dir,
+            [
+                {
+                    "billing_filename": pdf_path.name,
+                    "merged_filename": pdf_path.name,
+                    "type": "outgoing",
+                }
+            ],
+        )
+    except RuntimeError as exc:
+        print(f"Fehler: {exc}")
+        sys.exit(1)
+
+    print(pdf_path)
+    print(target_dir / "meta.json")
+
+
+if __name__ == "__main__":
+    main()
+
+
