@@ -90,7 +90,7 @@ def vendor_name_for_meta(meta_path: Path, month_dir: Path) -> str | None:
     return vendor
 
 
-def collect_jobs(month_dir: Path) -> list[tuple[Path, Path]]:
+def collect_jobs(month_dir: Path, year: int, month: int) -> list[tuple[Path, Path]]:
     jobs: list[tuple[Path, Path]] = []
     destination_dir = target_dir(month_dir)
 
@@ -109,7 +109,7 @@ def collect_jobs(month_dir: Path) -> list[tuple[Path, Path]]:
             if not source_path.is_file():
                 raise RuntimeError(f"Datei aus meta.json nicht gefunden: {source_path}")
 
-            destination_name = f"{vendor}__{source_path.name}"
+            destination_name = f"{year:04d}_{month:02d}_{vendor}__{source_path.name}"
             jobs.append((source_path, destination_dir / destination_name))
 
     return jobs
@@ -160,7 +160,7 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        jobs = collect_jobs(month_dir)
+        jobs = collect_jobs(month_dir, year, month)
         jobs = deduplicate_jobs(jobs)
         ensure_no_destination_conflicts(jobs)
     except RuntimeError as exc:
