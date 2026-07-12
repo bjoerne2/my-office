@@ -6,7 +6,7 @@ Aktuell enthalten:
 
 - `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney in den Unterordner `tmp/staging/<jahr>/<monat>/Transactions/` und benennt die CSV-Dateien nach dem Konto.
 - `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
-- `select_personal_transaction`: Wählt genau eine persönliche Buchung aus `transactions_personal.csv` aus und übernimmt sie in einen Zielordner.
+- `extract_single_transaction`: Wählt genau eine Transaktion aus einer frei wählbaren Kontodatei unter `Transactions/` aus und übernimmt sie in einen Zielordner.
 - `ignore_transactions`: Verschiebt fest definierte, bewusst zu ignorierende Monatsumsätze nach `tmp/staging/<jahr>/<monat>/Ignored/transactions.csv`.
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data/<Rechnungssteller>` und kopiert sie direkt in den Staging-Monatsordner.
 - `create_transaction_pdfs`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
@@ -118,13 +118,13 @@ Die bisherige Hauptdatei `transactions.csv` entspricht jetzt `Transactions/DKB-B
 
 Die Ausgabe wird nach `tmp/staging/2026/01/GitHub/transactions.csv` geschrieben.
 
-### Persönliche Buchung gezielt übernehmen
+### Einzelne Buchung aus einem Konto gezielt übernehmen
 
 ```bash
-./select_personal_transaction 2026 01 "Inwx GmbH" GitHub
+./extract_single_transaction 2026 01 "Girokonto" "Inwx GmbH" GitHub
 ```
 
-Das Skript sucht in `tmp/staging/2026/01/Transactions/Girokonto.csv` nach genau einer Zeile mit dem angegebenen Teilstring
+Das Skript sucht in `tmp/staging/2026/01/Transactions/<Kontoname>.csv` nach genau einer Zeile mit dem angegebenen Teilstring
 und übernimmt diese in `tmp/staging/2026/01/<Zielordner>/transactions.csv`. Wenn mehrere Zeilen passen, werden diese als CSV
 ausgegeben und das Skript endet mit einer Fehlermeldung.
 

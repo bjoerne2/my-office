@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from python.args import validate_year_month
-from python.transactions_paths import PERSONAL_ACCOUNT_NAME, account_csv_path
+from python.transactions_paths import account_csv_path, month_dir
 
 ACCOUNT_LABEL_COLUMN = "Kontobezeichnung"
 TARGET_TRANSACTIONS_FILENAME = "transactions.csv"
@@ -29,32 +29,34 @@ def ensure_project_venv() -> None:
     os.execv(str(venv_python), [str(venv_python), *sys.argv])
 
 
+ensure_project_venv()
+
+
 def usage() -> str:
-    return "Usage: select_personal_transaction <year> <month> <teilstring> <zielordner>"
+    return "Usage: extract_single_transaction <year> <month> <kontoname> <teilstring> <zielordner>"
 
 
-def parse_args(argv: list[str]) -> tuple[int, int, str, str]:
-    if len(argv) != 4:
+def parse_args(argv: list[str]) -> tuple[int, int, str, str, str]:
+    if len(argv) != 5:
         raise ValueError(usage())
 
     year, month = validate_year_month(argv[0], argv[1], example="2026 01")
-    transaction_substring = argv[2].strip()
-    target_dir = argv[3].strip()
+    account_name = argv[2].strip()
+    transaction_substring = argv[3].strip()
+    target_dir = argv[4].strip()
 
+    if not account_name:
+        raise ValueError("Kontoname darf nicht leer sein")
     if not transaction_substring:
         raise ValueError("Teilstring darf nicht leer sein")
     if not target_dir:
         raise ValueError("Zielordner darf nicht leer sein")
 
-    return year, month, transaction_substring, target_dir
+    return year, month, account_name, transaction_substring, target_dir
 
 
-def month_dir(repo_root: Path, year: int, month: int) -> Path:
-    return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}"
-
-
-def source_csv_path(repo_root: Path, year: int, month: int) -> Path:
-    return account_csv_path(repo_root, year, month, PERSONAL_ACCOUNT_NAME)
+def source_csv_path(repo_root: Path, year: int, month: int, account_name: str) -> Path:
+    return account_csv_path(repo_root, year, month, account_name)
 
 
 def resolve_target_dir(repo_root: Path, year: int, month: int, target_dir_value: str) -> Path:
@@ -135,16 +137,14 @@ def print_matching_rows(header: list[str], rows: list[list[str]]) -> None:
 
 
 def main() -> None:
-    ensure_project_venv()
-
     try:
-        year, month, transaction_substring, target_dir_value = parse_args(sys.argv[1:])
+        year, month, account_name, transaction_substring, target_dir_value = parse_args(sys.argv[1:])
     except ValueError as exc:
         print(exc)
         sys.exit(1)
 
     repo_root = Path(__file__).resolve().parent
-    src_path = source_csv_path(repo_root, year, month)
+    src_path = source_csv_path(repo_root, year, month, account_name)
     try:
         target_dir = resolve_target_dir(repo_root, year, month, target_dir_value)
     except ValueError as exc:
@@ -164,11 +164,11 @@ def main() -> None:
 
     matches = find_matching_rows(source_rows, transaction_substring)
     if not matches:
-        print(f"Fehler: Keine persönliche Transaktion mit Teilstring gefunden: {transaction_substring}")
+        print(f"Fehler: Keine Transaktion mit Teilstring gefunden: {transaction_substring}")
         sys.exit(1)
 
     if len(matches) > 1:
-        print(f"Fehler: Mehrere persönliche Transaktionen mit Teilstring gefunden: {transaction_substring}")
+        print(f"Fehler: Mehrere Transaktionen mit Teilstring gefunden: {transaction_substring}")
         print_matching_rows(source_header, matches)
         sys.exit(1)
 
@@ -196,5 +196,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 
