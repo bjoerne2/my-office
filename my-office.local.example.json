@@ -1,4 +1,13 @@
 {
   "documents_export_dir": "~/Documents/Buchführung"
 }
-
+  "documents_export_dir": "~/Documents/Buchfuehrung",
+  "documents_export_expected_dirs": [
+    "AWS",
+    "Domainfactory",
+    "GitHub",
+    "Google",
+    "hosting.de",
+    "HP Instant Ink",
+    "PayPal"
+  ]

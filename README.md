@@ -21,6 +21,7 @@ Aktuell enthalten:
 - `copy_staging_documents`: Kopiert Rechnungs-, kombinierte PDFs und `meta.json` aus `tmp/staging` in ein lokal konfiguriertes Zielverzeichnis.
 - `copy_datev_rechnungseingang`: Kopiert kombinierte PDFs aus `merged_filename` nach `tmp/staging/<jahr>/<monat>/DATEV Unternehmen Online/Rechnungseingang/`.
 - `create_paypal_income_pdf`: Erstellt aus `transactions_paypal.csv` ein Einnahmen-PDF für monkkee und pflegt den `PayPal`-Ordner inkl. `meta.json`.
+- `check_documents_export`: Prüft das Dokumentenzielverzeichnis für einen Monat gegen eine Standardliste von Anbieterordnern und listet vorhandene kombinierte PDFs auf.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
 
 ## Voraussetzungen
@@ -81,7 +82,16 @@ Beispiel:
 
 ```json
 {
-  "documents_export_dir": "~/Documents/Buchfuehrung"
+  "documents_export_dir": "~/Documents/Buchfuehrung",
+  "documents_export_expected_dirs": [
+    "AWS",
+    "Domainfactory",
+    "GitHub",
+    "Google",
+    "hosting.de",
+    "HP Instant Ink",
+    "PayPal"
+  ]
 }
 ```
 
@@ -259,6 +269,21 @@ Echter Kopiervorgang:
 Das Skript durchsucht den Monatsordner `tmp/staging/<Jahr>/<Monat>` nach `meta.json` und kopiert
 für alle Einträge die Dateien aus `billing_filename` und `merged_filename` sowie die jeweilige
 `meta.json` nach `<Zielordner>/<Jahr>/<Monat>/<Anbieter>/`.
+
+### Dokumentenzielverzeichnis für einen Monat prüfen
+
+```bash
+./check_documents_export 2026 01
+```
+
+Das Skript prüft `<documents_export_dir>/<Jahr>/<Monat>` und listet:
+
+- gefundene Anbieterordner mit `✅`, wenn sie in `documents_export_expected_dirs` stehen
+- zusätzliche Anbieterordner mit `➕`
+- fehlende erwartete Anbieterordner mit `❌`
+
+Unter jedem gefundenen Verzeichnis werden eingerückt alle Dokumente mit Suffix
+`-beleg_und_buchung.pdf` ausgegeben.
 
 ### Kombinierte PDFs für DATEV Rechnungseingang bereitstellen
 
