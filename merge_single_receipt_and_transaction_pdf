@@ -24,30 +24,27 @@ def ensure_project_venv() -> None:
 
 ensure_project_venv()
 
+from python.args import validate_staging_folder_name, validate_year_month
 from python.meta import read_meta_entries, write_meta_entries
 from python.pdf_merge_common import merge_pdfs
+from python.transactions_paths import month_dir
 
 
 def usage() -> str:
-    return "Usage: merge_single_receipt_and_transaction_pdf <ordnername>"
+    return "Usage: merge_single_receipt_and_transaction_pdf <year> <month> <ordnername>"
 
 
-def parse_args(argv: list[str]) -> str:
-    if len(argv) != 1:
+def parse_args(argv: list[str]) -> tuple[int, int, str]:
+    if len(argv) != 3:
         raise ValueError(usage())
 
-    folder_name = argv[0].strip()
-    if not folder_name:
-        raise ValueError("Ordnername darf nicht leer sein")
-
-    return folder_name
+    year, month = validate_year_month(argv[0], argv[1], example="2026 01")
+    folder_name = validate_staging_folder_name(argv[2])
+    return year, month, folder_name
 
 
-def target_dir(repo_root: Path, folder_name: str) -> Path:
-    target = Path(folder_name).expanduser()
-    if target.is_absolute():
-        return target
-    return (repo_root / target).resolve()
+def target_dir(repo_root: Path, year: int, month: int, folder_name: str) -> Path:
+    return month_dir(repo_root, year, month) / folder_name
 
 
 def require_single_billing_pdf(target: Path, transaction_filename: str | None) -> Path:
@@ -82,13 +79,13 @@ def merged_filename(billing_filename: str) -> str:
 
 def main() -> None:
     try:
-        folder_name = parse_args(sys.argv[1:])
+        year, month, folder_name = parse_args(sys.argv[1:])
     except ValueError as exc:
         print(exc)
         sys.exit(1)
 
     repo_root = Path(__file__).resolve().parent
-    target = target_dir(repo_root, folder_name)
+    target = target_dir(repo_root, year, month, folder_name)
 
     if not target.is_dir():
         print(f"Ordner nicht gefunden: {target}")

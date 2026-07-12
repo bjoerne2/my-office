@@ -25,3 +25,14 @@ def validate_vendor(vendor_value: str, resolver: Callable[[str], T]) -> T:
     return resolver(vendor_value.strip().lower())
 
 
+def validate_staging_folder_name(folder_value: str) -> str:
+    folder_name = folder_value.strip()
+    if not folder_name:
+        raise ValueError("Ordnername darf nicht leer sein")
+
+    if folder_name in {".", ".."} or "/" in folder_name or "\\" in folder_name:
+        raise ValueError("Ordnername muss ohne Pfadangabe übergeben werden")
+
+    return folder_name
+
+

@@ -25,20 +25,20 @@ def ensure_project_venv() -> None:
 
 ensure_project_venv()
 
+from python.args import validate_staging_folder_name, validate_year_month
+
 
 def usage() -> str:
-    return "Usage: process_single_transaction <ordnername>"
+    return "Usage: process_single_transaction <year> <month> <ordnername>"
 
 
-def parse_args(argv: list[str]) -> str:
-    if len(argv) != 1:
+def parse_args(argv: list[str]) -> tuple[int, int, str]:
+    if len(argv) != 3:
         raise ValueError(usage())
 
-    folder_name = argv[0].strip()
-    if not folder_name:
-        raise ValueError("Ordnername darf nicht leer sein")
-
-    return folder_name
+    year, month = validate_year_month(argv[0], argv[1], example="2026 01")
+    folder_name = validate_staging_folder_name(argv[2])
+    return year, month, folder_name
 
 
 def run_step(repo_root: Path, script_name: str, args: list[str]) -> None:
@@ -60,7 +60,7 @@ def run_step(repo_root: Path, script_name: str, args: list[str]) -> None:
 
 def main() -> None:
     try:
-        folder_name = parse_args(sys.argv[1:])
+        year, month, folder_name = parse_args(sys.argv[1:])
     except ValueError as exc:
         print(exc)
         sys.exit(1)
@@ -74,8 +74,8 @@ def main() -> None:
 
     try:
         for script_name in steps:
-            print(f"==> {script_name} {folder_name}")
-            run_step(repo_root, script_name, [folder_name])
+            print(f"==> {script_name} {year:04d} {month:02d} {folder_name}")
+            run_step(repo_root, script_name, [f"{year:04d}", f"{month:02d}", folder_name])
     except RuntimeError as exc:
         print(f"Fehler: {exc}")
         sys.exit(1)

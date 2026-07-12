@@ -171,21 +171,21 @@ Wenn in den Umsatzdaten eine Kontobezeichnung vorhanden ist, wird sie als oberst
 ### Einzelnes Buchungs-PDF in manuellem Ordner erzeugen
 
 ```bash
-./create_single_transaction_pdf tmp/staging/2026/01/MeinOrdner
+./create_single_transaction_pdf 2026 01 MeinOrdner
 ```
 
-Der Zielordner (relativ zum Repository oder absolut) muss eine `transactions.csv` mit genau einer Buchung enthalten. Das Skript erzeugt daraus
-ein einzelnes Buchungs-PDF im selben Ordner und legt bzw. aktualisiert die `meta.json`.
+Der Zielordner `tmp/staging/<Jahr>/<Monat>/<Ordnername>/` muss eine `transactions.csv` mit genau einer Buchung enthalten.
+Das Skript erzeugt daraus ein einzelnes Buchungs-PDF im selben Ordner und legt bzw. aktualisiert die `meta.json`.
 
 Wenn bereits ein Rechnungsname in `meta.json` hinterlegt ist, wird dieser zusätzlich im Buchungs-PDF angezeigt.
 
 ### Einzelnes Rechnungs-PDF in `meta.json` erkennen
 
 ```bash
-./detect_single_receipt_pdf tmp/staging/2026/01/MeinOrdner
+./detect_single_receipt_pdf 2026 01 MeinOrdner
 ```
 
-Der Zielordner (relativ zum Repository oder absolut) muss genau ein Rechnungs-PDF enthalten.
+Der Zielordner `tmp/staging/<Jahr>/<Monat>/<Ordnername>/` muss genau ein Rechnungs-PDF enthalten.
 Das Skript schreibt dessen Dateinamen als `billing_filename` nach `meta.json`.
 
 ### Rechnung und Buchung zusammenführen
@@ -200,16 +200,16 @@ Das Skript führt die in `meta.json` zugeordneten Rechnungs- und Kontobeleg-PDFs
 ### Einzelne manuelle Rechnung und Buchung zusammenführen
 
 ```bash
-./merge_single_receipt_and_transaction_pdf tmp/staging/2026/01/MeinOrdner
+./merge_single_receipt_and_transaction_pdf 2026 01 MeinOrdner
 ```
 
-Der Zielordner (relativ zum Repository oder absolut) muss genau ein Rechnungs-PDF sowie ein zuvor erzeugtes Buchungs-PDF enthalten.
+Der Zielordner `tmp/staging/<Jahr>/<Monat>/<Ordnername>/` muss genau ein Rechnungs-PDF sowie ein zuvor erzeugtes Buchungs-PDF enthalten.
 Das Skript aktualisiert die `meta.json` und erzeugt ein kombiniertes PDF auf Basis des Rechnungsdateinamens.
 
 ### Manuellen Einzelprozess vollständig ausführen
 
 ```bash
-./process_single_transaction tmp/staging/2026/01/MeinOrdner
+./process_single_transaction 2026 01 MeinOrdner
 ```
 
 Das Skript führt nacheinander aus:
