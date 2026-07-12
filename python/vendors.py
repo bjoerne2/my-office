@@ -21,7 +21,7 @@ VENDOR_RULES: dict[str, VendorRule] = {
     ),
     "domainfactory": VendorRule(
         slug="domainfactory",
-        directory_name="Domainfactory",
+        directory_name="DomainFactory",
         match_terms=("domainfactory gmbh",),
         leistungsinhalt="Webhosting und Internet-Infrastruktur",
     ),

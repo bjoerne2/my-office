@@ -372,7 +372,7 @@ def collect_domainfactory_candidates(pdf_dir: Path) -> list[PdfCandidate]:
         candidates.append(PdfCandidate(path=path, receipt_date=receipt_date, invoice_ref=invoice_ref))
 
     if not candidates:
-        raise RuntimeError(f"Keine Domainfactory-PDF-Kandidaten in {pdf_dir} gefunden")
+        raise RuntimeError(f"Keine DomainFactory-PDF-Kandidaten in {pdf_dir} gefunden")
 
     return candidates
 
@@ -541,7 +541,7 @@ def choose_best_domainfactory_candidate(record: TransactionRecord, candidates: l
         return min(monthly, key=lambda candidate: abs((candidate.receipt_date - record.booking_date).days))
 
     raise RuntimeError(
-        f"Kein Domainfactory-PDF für Rechnungsnummer {record.invoice_ref or '(unbekannt)'} "
+        f"Kein DomainFactory-PDF für Rechnungsnummer {record.invoice_ref or '(unbekannt)'} "
         f"vom {record.booking_date.strftime('%Y-%m-%d')} gefunden"
     )
 

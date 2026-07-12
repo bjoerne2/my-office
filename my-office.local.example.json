@@ -4,7 +4,7 @@
   "documents_export_dir": "~/Documents/Buchfuehrung",
   "documents_export_expected_dirs": [
     "AWS",
-    "Domainfactory",
+    "DomainFactory",
     "GitHub",
     "Google",
     "hosting.de",

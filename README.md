@@ -85,7 +85,7 @@ Beispiel:
   "documents_export_dir": "~/Documents/Buchfuehrung",
   "documents_export_expected_dirs": [
     "AWS",
-    "Domainfactory",
+    "DomainFactory",
     "GitHub",
     "Google",
     "hosting.de",
@@ -148,7 +148,7 @@ Das Skript liest `tmp/staging/2026/01/transactions.csv`, filtert fest definierte
 
 Die passenden PDFs werden anbieterspezifisch gematcht, direkt in den Staging-Ordner kopiert
 und als Eintragsliste in `meta.json` abgelegt. Für GitHub erfolgt das Matching über den Dateinamen,
-für AWS über Betrag und Inhalte der PDF-Dateien, für `hosting.de` und `Domainfactory` primär
+für AWS über Betrag und Inhalte der PDF-Dateien, für `hosting.de` und `DomainFactory` primär
 über Rechnungsnummern aus Umsatzdaten und PDF-Dateinamen.
 
 ### Nicht verarbeitete Transaktionen ausgeben
