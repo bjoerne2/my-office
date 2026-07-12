@@ -277,21 +277,27 @@ Das Skript prüft `<documents_export_dir>/<Jahr>/<Monat>` und listet:
 Unter jedem gefundenen Verzeichnis werden eingerückt alle Dokumente mit Suffix
 `-beleg_und_buchung.pdf` ausgegeben.
 
-### Kombinierte PDFs für DATEV Rechnungseingang bereitstellen
+### Kombinierte PDFs für DATEV bereitstellen
 
 ```bash
 ./copy_datev_rechnungseingang 2026 01
 ```
 
 Das Skript durchsucht `tmp/staging/<Jahr>/<Monat>` nach `meta.json` und kopiert alle gefundenen
-`merged_filename`-Dateien nach
-`tmp/staging/<Jahr>/<Monat>/DATEV Unternehmen Online/Rechnungseingang/`.
+`merged_filename`-Dateien je nach Metadatentyp nach
+`tmp/staging/<Jahr>/<Monat>/DATEV Unternehmen Online/Rechnungseingang/` oder
+`tmp/staging/<Jahr>/<Monat>/DATEV Unternehmen Online/Rechnungsausgang/`.
 
 Die Zieldateien werden dabei so benannt:
 
 ```text
 <Anbieter>__<merged_filename>
 ```
+
+Regel:
+
+- `type: incoming` → `Rechnungseingang`
+- `type: outgoing` → `Rechnungsausgang`
 
 ### PayPal-Einnahmen-PDF für monkkee erzeugen
 
@@ -304,7 +310,8 @@ Das Skript liest `tmp/staging/<Jahr>/<Monat>/transactions_paypal.csv`, summiert 
 `tmp/staging/<Jahr>/<Monat>/PayPal/` die Datei `Einnahmen monkkee.pdf`.
 
 Die zugehörige `meta.json` wird mit einem Eintrag gepflegt, bei dem `billing_filename` und
-`merged_filename` beide auf `Einnahmen monkkee.pdf` gesetzt werden.
+`merged_filename` beide auf `Einnahmen monkkee.pdf` gesetzt werden. Zusätzlich wird
+`type: outgoing` gespeichert.
 
 ## rclone / Google Drive Sync
 

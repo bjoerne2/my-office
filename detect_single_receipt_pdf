@@ -91,6 +91,7 @@ def main() -> None:
 
         meta_entry = dict(meta_entries[0]) if meta_entries else {}
         meta_entry["billing_filename"] = receipt_pdfs[0].name
+        meta_entry["type"] = "incoming"
         write_meta_entries(target, [meta_entry])
     except RuntimeError as exc:
         print(f"Fehler: {exc}")

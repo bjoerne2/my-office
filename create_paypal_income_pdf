@@ -220,6 +220,7 @@ def main() -> None:
                 {
                     "billing_filename": pdf_path.name,
                     "merged_filename": pdf_path.name,
+                    "type": "outgoing",
                 }
             ],
         )

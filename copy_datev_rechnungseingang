@@ -13,6 +13,7 @@ from python.args import validate_year_month
 
 DATEV_DIRNAME = "DATEV Unternehmen Online"
 RECHNUNGSEINGANG_DIRNAME = "Rechnungseingang"
+RECHNUNGSAUSGANG_DIRNAME = "Rechnungsausgang"
 
 
 def ensure_project_venv() -> None:
@@ -52,7 +53,9 @@ def staging_month_dir(root: Path, year: int, month: int) -> Path:
     return root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}"
 
 
-def target_dir(month_dir: Path) -> Path:
+def target_dir(month_dir: Path, entry_type: str) -> Path:
+    if entry_type == "outgoing":
+        return month_dir / DATEV_DIRNAME / RECHNUNGSAUSGANG_DIRNAME
     return month_dir / DATEV_DIRNAME / RECHNUNGSEINGANG_DIRNAME
 
 
@@ -92,7 +95,6 @@ def vendor_name_for_meta(meta_path: Path, month_dir: Path) -> str | None:
 
 def collect_jobs(month_dir: Path, year: int, month: int) -> list[tuple[Path, Path]]:
     jobs: list[tuple[Path, Path]] = []
-    destination_dir = target_dir(month_dir)
 
     for meta_path in sorted(month_dir.glob("**/meta.json")):
         vendor = vendor_name_for_meta(meta_path, month_dir)
@@ -101,6 +103,10 @@ def collect_jobs(month_dir: Path, year: int, month: int) -> list[tuple[Path, Pat
 
         entries = read_meta_entries(meta_path)
         for entry in entries:
+            entry_type = entry.get("type")
+            if not isinstance(entry_type, str) or entry_type not in {"incoming", "outgoing"}:
+                raise RuntimeError(f"type fehlt oder ist ungültig in {meta_path}")
+
             merged_filename = entry.get("merged_filename")
             if not isinstance(merged_filename, str) or not merged_filename.strip():
                 continue
@@ -109,6 +115,7 @@ def collect_jobs(month_dir: Path, year: int, month: int) -> list[tuple[Path, Pat
             if not source_path.is_file():
                 raise RuntimeError(f"Datei aus meta.json nicht gefunden: {source_path}")
 
+            destination_dir = target_dir(month_dir, entry_type)
             destination_name = f"{year:04d}_{month:02d}_{vendor}__{source_path.name}"
             jobs.append((source_path, destination_dir / destination_name))
 

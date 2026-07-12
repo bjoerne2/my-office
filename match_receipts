@@ -633,7 +633,7 @@ def main() -> None:
         transaction_records = read_transaction_records(csv_path, vendor)
         candidates = collect_candidates(pdf_dir, vendor)
         matched_pdfs = match_pdfs_to_transactions(vendor, transaction_records, candidates)
-        meta_entries = [{"billing_filename": matched_pdf.name} for matched_pdf in matched_pdfs]
+        meta_entries = [{"billing_filename": matched_pdf.name, "type": "incoming"} for matched_pdf in matched_pdfs]
         copied_paths = copy_unique_pdfs(target_dir, matched_pdfs)
         meta_path = write_meta_entries(target_dir, meta_entries)
     except RuntimeError as exc:
