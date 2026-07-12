@@ -85,6 +85,9 @@ def main() -> None:
             print(f"==> export_transactions {year_arg} {month_arg}")
             run_step(repo_root, "export_transactions", [year_arg, month_arg])
 
+        print(f"==> ignore_transactions {year_arg} {month_arg}")
+        run_step(repo_root, "ignore_transactions", [year_arg, month_arg])
+
         print(f"==> create_paypal_income_pdf {year_arg} {month_arg}")
         run_step(repo_root, "create_paypal_income_pdf", [year_arg, month_arg])
 

@@ -4,7 +4,6 @@ Dieses Repository enthält kleine Office-Automatisierungen.
 
 Aktuell enthalten:
 
-- `process_paypal_report`: Verarbeitung von PayPal-CSV-Reports und Umwandlung in Excel.
 - `export_transactions`: Exportiert Monatsumsätze aus MoneyMoney und verschiebt die CSVs nach `tmp/staging/<jahr>/<monat>/transactions.csv` sowie `tmp/staging/<jahr>/<monat>/transactions_personal.csv`.
 - `extract_transactions`: Filtert Monatsumsätze pro Rechnungssteller nach `tmp/staging/<jahr>/<monat>/<Rechnungssteller>/transactions.csv`.
 - `select_personal_transaction`: Wählt genau eine persönliche Buchung aus `transactions_personal.csv` aus und übernimmt sie in einen Zielordner.
@@ -23,6 +22,7 @@ Aktuell enthalten:
 - `create_paypal_income_pdf`: Erstellt aus `transactions_paypal.csv` ein Einnahmen-PDF für monkkee und pflegt den `PayPal`-Ordner inkl. `meta.json`.
 - `check_documents_export`: Prüft das Dokumentenzielverzeichnis für einen Monat gegen eine Standardliste von Anbieterordnern und listet vorhandene kombinierte PDFs auf.
 - `sync_app_scripts_data`: Synchronisiert `tmp/app_scripts_data` unidirektional von Google Drive nach lokal.
+- `unprocessed_transactions`: Gibt die verbleibenden, noch nicht verarbeiteten Transaktionen als CSV auf der Standardausgabe aus.
 
 ## Voraussetzungen
 
@@ -231,6 +231,7 @@ Der Workflow führt nacheinander aus:
 ```
 
 Das Skript führt zuerst `export_transactions` genau einmal aus und ruft anschließend
+`ignore_transactions <jahr> <monat>`,
 `create_paypal_income_pdf <jahr> <monat>` sowie danach
 `process_vendor_month <jahr> <monat> <anbieter>` für alle bekannten Anbieter auf.
 Anbieter ohne passende Monatsbuchungen werden übersprungen.
