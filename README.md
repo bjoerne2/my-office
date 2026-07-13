@@ -11,6 +11,7 @@ Aktuell enthalten:
 - `match_receipts`: Findet passende PDFs in `tmp/app_scripts_data/<Rechnungssteller>` und kopiert sie direkt in den Staging-Monatsordner.
 - `create_transaction_pdfs`: Erzeugt aus extrahierten Transaktionen einfache PDF-Dateien mit Schlüssel/Wert-Tabelle im Staging-Monatsordner.
 - `create_single_transaction_pdf`: Erzeugt aus genau einer Buchung in einem manuell vorbereiteten Ordner ein Buchungs-PDF und pflegt `meta.json`.
+- `create_cash_payment_pdf`: Erzeugt in einem manuell vorbereiteten Ordner ein Barzahlungs-PDF und pflegt `meta.json`.
 - `detect_single_receipt_pdf`: Sucht in einem manuell vorbereiteten Ordner das einzelne Rechnungs-PDF und schreibt dessen Dateinamen nach `meta.json`.
 - `merge_receipt_and_transaction_pdfs`: Führt Rechnungs-PDFs und Kontobeleg-PDFs paarweise zu kombinierten PDFs zusammen.
 - `merge_single_receipt_and_transaction_pdf`: Führt in einem manuell vorbereiteten Ordner genau ein Rechnungs-PDF mit dem erzeugten Buchungs-PDF zusammen und pflegt `meta.json`.
@@ -184,6 +185,18 @@ Das Skript erzeugt daraus ein einzelnes Buchungs-PDF im selben Ordner und legt b
 
 Wenn bereits ein Rechnungsname oder eine `description` in `meta.json` hinterlegt sind, werden diese zusätzlich im Buchungs-PDF angezeigt.
 
+### Barzahlungs-PDF in manuellem Ordner erzeugen
+
+```bash
+./create_cash_payment_pdf 2026 01 MeinOrdner 12,34
+```
+
+Der Zielordner `tmp/staging/<Jahr>/<Monat>/<Ordnername>/` muss bereits existieren. Das Skript erzeugt daraus
+ein einzelnes Barzahlungs-PDF im selben Ordner und legt bzw. aktualisiert die `meta.json`.
+
+Wenn bereits ein Rechnungsname oder eine `description` in `meta.json` hinterlegt sind, werden diese zusätzlich im
+Barzahlungs-PDF angezeigt.
+
 ### Einzelnes Rechnungs-PDF in `meta.json` erkennen
 
 ```bash
@@ -220,11 +233,14 @@ Das Skript aktualisiert die `meta.json` und erzeugt ein kombiniertes PDF auf Bas
 ```
 
 Das Skript führt nacheinander aus und reicht eine optionale Beschreibung an `detect_single_receipt_pdf` weiter,
-die anschließend als `description` in `meta.json` für das Buchungs-PDF verwendet wird:
+die anschließend als `description` in `meta.json` für das Buchungs- bzw. Barzahlungs-PDF verwendet wird:
 
 1. `detect_single_receipt_pdf`
-2. `create_single_transaction_pdf`
+2. `create_single_transaction_pdf` oder Überspringen bei bereits vorhandenem manuellem Transaktions-PDF
 3. `merge_single_receipt_and_transaction_pdf`
+
+Für Barzahlungen zuerst `create_cash_payment_pdf <jahr> <monat> <ordner> <betrag>` ausführen und danach
+`process_single_receipt`, damit Rechnungs-PDF, Beschreibung und Merge-Datei automatisch ergänzt werden.
 
 ### Gesamt-Workflow für einen Anbieter
 

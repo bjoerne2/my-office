@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import re
 import unicodedata
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 from reportlab.lib import colors
@@ -25,6 +26,11 @@ ACCOUNT_NAME_FIELD_LABELS = ("Kontobezeichnung",)
 
 def normalize_nfc(value: str) -> str:
     return unicodedata.normalize("NFC", value)
+
+
+def format_eur(amount: Decimal) -> str:
+    quantized = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"{quantized:.2f}".replace(".", ",") + " EUR"
 
 
 def read_transactions(csv_path: Path) -> tuple[list[str], list[list[str]]]:
@@ -184,5 +190,49 @@ def write_transaction_pdf(
         topMargin=15 * mm,
         bottomMargin=15 * mm,
         title="Buchung",
+    )
+    document.build(story)
+
+
+def write_cash_payment_pdf(
+    output_path: Path,
+    amount: Decimal,
+    *,
+    billing_filename: str | None = None,
+    description: str | None = None,
+    month_label: str | None = None,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph("Barzahlung", styles["Title"]),
+        Spacer(1, 8 * mm),
+    ]
+
+    summary_rows: list[list[str]] = []
+    if billing_filename:
+        summary_rows.append(["Rechnung", normalize_nfc(billing_filename)])
+    if description:
+        summary_rows.append(["Leistungsinhalt", normalize_nfc(description)])
+
+    if summary_rows:
+        story.append(make_table(summary_rows))
+        story.append(Spacer(1, 6 * mm))
+
+    payment_rows = [["Zahlungsart", "Barzahlung"], ["Betrag", format_eur(amount)]]
+    if month_label:
+        payment_rows.append(["Monat", normalize_nfc(month_label)])
+
+    story.append(make_table(payment_rows))
+
+    document = SimpleDocTemplate(
+        str(output_path),
+        pagesize=A4,
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+        topMargin=15 * mm,
+        bottomMargin=15 * mm,
+        title="Barzahlung",
     )
     document.build(story)

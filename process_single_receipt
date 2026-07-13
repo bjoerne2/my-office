@@ -26,6 +26,8 @@ def ensure_project_venv() -> None:
 ensure_project_venv()
 
 from python.args import validate_staging_folder_name, validate_year_month
+from python.meta import read_meta_entries
+from python.transactions_paths import month_dir
 
 
 def usage() -> str:
@@ -61,6 +63,30 @@ def run_step(repo_root: Path, script_name: str, args: list[str]) -> None:
         raise RuntimeError(details)
 
 
+def target_dir(repo_root: Path, year: int, month: int, folder_name: str) -> Path:
+    return month_dir(repo_root, year, month) / folder_name
+
+
+def existing_transaction_step(target: Path) -> tuple[str | None, list[str] | None]:
+    meta_entries = read_meta_entries(target)
+    if len(meta_entries) > 1:
+        raise RuntimeError(f"meta.json enthält mehr als einen Eintrag: {target / 'meta.json'}")
+
+    if meta_entries:
+        meta_entry = meta_entries[0]
+        transaction_filename = meta_entry.get("transaction_filename")
+        if isinstance(transaction_filename, str) and transaction_filename.strip():
+            transaction_path = target / transaction_filename.strip()
+            if transaction_path.is_file():
+                payment_method = meta_entry.get("payment_method")
+                cash_amount = meta_entry.get("cash_amount")
+                if payment_method == "cash" and isinstance(cash_amount, str) and cash_amount.strip():
+                    return "create_cash_payment_pdf", [cash_amount.strip()]
+                return "skip", None
+
+    return None, None
+
+
 def main() -> None:
     try:
         year, month, folder_name, description = parse_args(sys.argv[1:])
@@ -69,19 +95,29 @@ def main() -> None:
         sys.exit(1)
 
     repo_root = Path(__file__).resolve().parent
-    steps = (
-        "detect_single_receipt_pdf",
-        "create_single_transaction_pdf",
-        "merge_single_receipt_and_transaction_pdf",
-    )
+    target = target_dir(repo_root, year, month, folder_name)
 
     try:
-        for script_name in steps:
-            step_args = [f"{year:04d}", f"{month:02d}", folder_name]
-            if script_name == "detect_single_receipt_pdf" and description is not None:
-                step_args.append(description)
-            print(f"==> {script_name} {' '.join(step_args)}")
-            run_step(repo_root, script_name, step_args)
+        detect_args = [f"{year:04d}", f"{month:02d}", folder_name]
+        if description is not None:
+            detect_args.append(description)
+        print(f"==> detect_single_receipt_pdf {' '.join(detect_args)}")
+        run_step(repo_root, "detect_single_receipt_pdf", detect_args)
+
+        create_args = [f"{year:04d}", f"{month:02d}", folder_name]
+        existing_step, extra_args = existing_transaction_step(target)
+        if existing_step == "skip":
+            print("==> create_single_transaction_pdf übersprungen (vorhandenes Transaktions-PDF)")
+        elif existing_step == "create_cash_payment_pdf":
+            cash_args = [*create_args, *(extra_args or [])]
+            print(f"==> create_cash_payment_pdf {' '.join(cash_args)}")
+            run_step(repo_root, "create_cash_payment_pdf", cash_args)
+        else:
+            print(f"==> create_single_transaction_pdf {' '.join(create_args)}")
+            run_step(repo_root, "create_single_transaction_pdf", create_args)
+
+        print(f"==> merge_single_receipt_and_transaction_pdf {' '.join(create_args)}")
+        run_step(repo_root, "merge_single_receipt_and_transaction_pdf", create_args)
     except RuntimeError as exc:
         print(f"Fehler: {exc}")
         sys.exit(1)
@@ -89,5 +125,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
