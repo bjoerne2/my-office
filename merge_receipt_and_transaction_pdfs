@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -48,11 +49,15 @@ def staging_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> P
     return repo_root / "tmp" / "staging" / f"{year:04d}" / f"{month:02d}" / vendor.directory_name
 
 
+def normalize_nfc(value: str) -> str:
+    return unicodedata.normalize("NFC", value)
+
+
 def merged_output_filenames(billing_filenames: list[str]) -> list[str]:
     output_keys = []
     for billing_filename in billing_filenames:
         suffix = Path(billing_filename).suffix or ".pdf"
-        output_stem = f"{Path(billing_filename).stem}-beleg_und_buchung"
+        output_stem = normalize_nfc(f"{Path(billing_filename).stem}-beleg_und_buchung")
         output_keys.append((output_stem, suffix))
 
     total_counts = Counter(output_keys)

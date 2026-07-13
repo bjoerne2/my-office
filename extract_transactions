@@ -50,7 +50,7 @@ def destination_csv_path(repo_root: Path, year: int, month: int, vendor: VendorR
 
 def row_matches_vendor(row: list[str], vendor: VendorRule) -> bool:
 	haystack = " ".join(cell.strip().lower() for cell in row)
-	return any(term in haystack for term in vendor.match_terms)
+	return any(term.strip().lower() in haystack for term in vendor.match_terms)
 
 
 def extract_rows(input_path: Path, vendor: VendorRule) -> tuple[list[str], list[list[str]]]:
@@ -109,5 +109,4 @@ def main() -> None:
 
 if __name__ == "__main__":
 	main()
-
 

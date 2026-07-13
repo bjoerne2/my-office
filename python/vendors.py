@@ -19,6 +19,12 @@ VENDOR_RULES: dict[str, VendorRule] = {
         match_terms=("amazon web services", "aws emea"),
         leistungsinhalt="Cloud-Infrastruktur / IT-Betrieb",
     ),
+    "dkb": VendorRule(
+        slug="dkb",
+        directory_name="DKB",
+        match_terms=("Entgeltabschluss",),
+        leistungsinhalt="Bankdienstleistungen",
+    ),
     "domainfactory": VendorRule(
         slug="domainfactory",
         directory_name="DomainFactory",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import re
+import unicodedata
 from pathlib import Path
 
 from reportlab.lib import colors
@@ -20,6 +21,10 @@ PURPOSE_FIELD_LABELS = {
 PURPOSE_FIELD_PATTERN = re.compile(r",\s*(Umsatzart|Referenz|Mandat|Gläubiger-ID):\s*")
 DATE_FIELD_LABELS = ("Datum", "Buchungstag")
 ACCOUNT_NAME_FIELD_LABELS = ("Kontobezeichnung",)
+
+
+def normalize_nfc(value: str) -> str:
+    return unicodedata.normalize("NFC", value)
 
 
 def read_transactions(csv_path: Path) -> tuple[list[str], list[list[str]]]:
@@ -100,7 +105,7 @@ def parse_purpose_details(purpose: str) -> tuple[str, dict[str, str]]:
 def build_table_data(header: list[str], row: list[str], account_name: str | None = None) -> list[list[str]]:
     pairs: list[list[str]] = []
     if account_name:
-        pairs.append(["Konto", account_name])
+        pairs.append(["Konto", normalize_nfc(account_name)])
 
     for key, value in zip(header, row):
         if key in ACCOUNT_NAME_FIELD_LABELS:
@@ -109,13 +114,13 @@ def build_table_data(header: list[str], row: list[str], account_name: str | None
             description, parsed_fields = parse_purpose_details(value or "")
 
             if description and description != (value or ""):
-                pairs.append(["Verwendungszweck", description])
+                pairs.append(["Verwendungszweck", normalize_nfc(description)])
 
             for label in ("Umsatzart", "Referenznummer", "Mandatsnummer", "Gläubiger-ID"):
                 if label in parsed_fields:
-                    pairs.append([label, parsed_fields[label]])
+                    pairs.append([label, normalize_nfc(parsed_fields[label])])
         else:
-            pairs.append([key, value or ""])
+            pairs.append([key, normalize_nfc(value or "")])
 
     return pairs
 
@@ -161,9 +166,9 @@ def write_transaction_pdf(
 
     summary_rows: list[list[str]] = []
     if billing_filename:
-        summary_rows.append(["Rechnung", billing_filename])
+        summary_rows.append(["Rechnung", normalize_nfc(billing_filename)])
     if description:
-        summary_rows.append(["Leistungsinhalt", description])
+        summary_rows.append(["Leistungsinhalt", normalize_nfc(description)])
 
     if summary_rows:
         story.append(make_table(summary_rows))
@@ -181,4 +186,3 @@ def write_transaction_pdf(
         title="Buchung",
     )
     document.build(story)
-
