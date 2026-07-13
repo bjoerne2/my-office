@@ -79,6 +79,7 @@ Beispiel:
     "DomainFactory",
     "GitHub",
     "Google",
+    "OpenAI",
     "hosting.de",
     "HP Instant Ink",
     "PayPal"
@@ -146,8 +147,8 @@ Das Skript liest `tmp/staging/2026/01/Transactions/DKB-Business.csv`, filtert fe
 
 Die passenden PDFs werden anbieterspezifisch gematcht, direkt in den Staging-Ordner kopiert
 und als Eintragsliste in `meta.json` abgelegt. Für GitHub erfolgt das Matching über den Dateinamen,
-für AWS über Betrag und Inhalte der PDF-Dateien, für `hosting.de` und `DomainFactory` primär
-über Rechnungsnummern aus Umsatzdaten und PDF-Dateinamen.
+für AWS, Google, HP und OpenAI über Betrag und Inhalte der PDF-Dateien, für `hosting.de` und
+`DomainFactory` primär über Rechnungsnummern aus Umsatzdaten und PDF-Dateinamen.
 
 ### Nicht verarbeitete Transaktionen ausgeben
 

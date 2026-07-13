@@ -24,6 +24,8 @@ AWS_TOTAL_AMOUNT_PATTERN = re.compile(r"TOTAL AMOUNT\s+EUR\s+([0-9][0-9.,]*)")
 HP_BILLING_DATE_PATTERN = re.compile(r"Abrechnungsdatum:\s*([0-9]{2}\.[0-9]{2}\.[0-9]{2})")
 HP_TOTAL_AMOUNT_PATTERN = re.compile(r"Gesamtsumme:\s*([0-9][0-9.,]*)\s*€")
 GOOGLE_TOTAL_AMOUNT_PATTERN = re.compile(r"Gesamtsumme in EUR\s*([0-9][0-9.,]*)\s*€", re.IGNORECASE)
+OPENAI_INVOICE_DATE_PATTERN = re.compile(r"Date of issue\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})")
+OPENAI_AMOUNT_DUE_PATTERN = re.compile(r"Amount due\s+€\s*([0-9][0-9.,]*)")
 GERMAN_DATE_PATTERN = re.compile(r"([0-9]{1,2})\.\s*([A-Za-zÄÖÜäöü]{3,10})\.?\s*([0-9]{4})")
 HOSTING_PDF_NUMBER_PATTERN = re.compile(r"RE-(\d+)")
 HOSTING_RENR_PATTERN = re.compile(r"Renr\s+(\d+)")
@@ -117,8 +119,8 @@ def staging_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> P
 
 
 def app_data_dir(repo_root: Path, vendor: VendorRule) -> Path:
-    if vendor.slug == "dkb":
-        return repo_root / "tmp" / "download" / "DKB"
+    if vendor.slug in {"dkb", "openai"}:
+        return repo_root / "tmp" / "download" / vendor.directory_name
     elif vendor.slug == "hp":
         return repo_root / "tmp" / "download" / "HP Instant Ink"
 
@@ -346,6 +348,36 @@ def collect_google_candidates(pdf_dir: Path) -> list[PdfCandidate]:
     return candidates
 
 
+def extract_openai_candidate(path: Path) -> PdfCandidate | None:
+    text = extract_pdf_text(path)
+    normalized_text = " ".join(text.split())
+
+    amount_match = OPENAI_AMOUNT_DUE_PATTERN.search(normalized_text)
+    date_match = OPENAI_INVOICE_DATE_PATTERN.search(normalized_text)
+    if amount_match is None or date_match is None:
+        return None
+
+    return PdfCandidate(
+        path=path,
+        receipt_date=parse_invoice_date(date_match.group(1)),
+        total_amount=parse_eur_amount(amount_match.group(1)),
+    )
+
+
+def collect_openai_candidates(pdf_dir: Path) -> list[PdfCandidate]:
+    candidates: list[PdfCandidate] = []
+
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        candidate = extract_openai_candidate(path)
+        if candidate is not None:
+            candidates.append(candidate)
+
+    if not candidates:
+        raise RuntimeError(f"Keine OpenAI-PDF-Kandidaten in {pdf_dir} gefunden")
+
+    return candidates
+
+
 def collect_hosting_candidates(pdf_dir: Path) -> list[PdfCandidate]:
     candidates: list[PdfCandidate] = []
 
@@ -435,6 +467,8 @@ def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
         return collect_hosting_candidates(pdf_dir)
     if vendor.slug == "hp":
         return collect_hp_candidates(pdf_dir)
+    if vendor.slug == "openai":
+        return collect_openai_candidates(pdf_dir)
 
     return collect_default_candidates(pdf_dir, vendor)
 
@@ -518,6 +552,22 @@ def choose_best_hp_candidate(record: TransactionRecord, candidates: list[PdfCand
     )
 
 
+def choose_best_openai_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
+    matching_candidates = [candidate for candidate in candidates if candidate.total_amount == record.amount]
+
+    if not matching_candidates:
+        raise RuntimeError(
+            "Kein OpenAI-PDF für "
+            f"{record.booking_date.strftime('%Y-%m-%d')} "
+            f"mit Betrag {record.amount} gefunden"
+        )
+
+    return min(
+        matching_candidates,
+        key=lambda candidate: abs((candidate.receipt_date - record.booking_date).days),
+    )
+
+
 def choose_best_hosting_candidate(record: TransactionRecord, candidates: list[PdfCandidate]) -> PdfCandidate:
     # Primär: Matching per Rechnungsnummer
     if record.invoice_ref:
@@ -590,6 +640,15 @@ def match_pdfs_to_transactions(vendor: VendorRule, records: list[TransactionReco
         matched_paths: list[Path] = []
         for record in records:
             candidate = choose_best_google_candidate(record, remaining_candidates)
+            remaining_candidates.remove(candidate)
+            matched_paths.append(candidate.path)
+        return matched_paths
+
+    if vendor.slug == "openai":
+        remaining_candidates = list(candidates)
+        matched_paths: list[Path] = []
+        for record in records:
+            candidate = choose_best_openai_candidate(record, remaining_candidates)
             remaining_candidates.remove(candidate)
             matched_paths.append(candidate.path)
         return matched_paths
