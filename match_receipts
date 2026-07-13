@@ -119,7 +119,7 @@ def staging_dir(repo_root: Path, year: int, month: int, vendor: VendorRule) -> P
 
 
 def app_data_dir(repo_root: Path, vendor: VendorRule) -> Path:
-    if vendor.slug in {"dkb", "openai"}:
+    if vendor.slug in {"dkb", "openai", "telekom"}:
         return repo_root / "tmp" / "download" / vendor.directory_name
     elif vendor.slug == "hp":
         return repo_root / "tmp" / "download" / "HP Instant Ink"
@@ -266,10 +266,10 @@ def collect_default_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCan
     return candidates
 
 
-def collect_dkb_candidates(pdf_dir: Path) -> list[PdfCandidate]:
-    paths = sorted(pdf_dir.glob("Kontodetails*.pdf"))
+def collect_static_candidates(pdf_dir: Path, pattern: str, label: str) -> list[PdfCandidate]:
+    paths = sorted(pdf_dir.glob(pattern))
     if not paths:
-        raise RuntimeError(f"Keine statische DKB-PDF in {pdf_dir} gefunden")
+        raise RuntimeError(f"Keine statische {label}-PDF in {pdf_dir} gefunden")
 
     return [PdfCandidate(path=paths[0])]
 
@@ -460,7 +460,7 @@ def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
     if vendor.slug == "domainfactory":
         return collect_domainfactory_candidates(pdf_dir)
     if vendor.slug == "dkb":
-        return collect_dkb_candidates(pdf_dir)
+        return collect_static_candidates(pdf_dir, "Kontodetails*.pdf", "DKB")
     if vendor.slug == "google":
         return collect_google_candidates(pdf_dir)
     if vendor.slug == "hosting":
@@ -469,6 +469,8 @@ def collect_candidates(pdf_dir: Path, vendor: VendorRule) -> list[PdfCandidate]:
         return collect_hp_candidates(pdf_dir)
     if vendor.slug == "openai":
         return collect_openai_candidates(pdf_dir)
+    if vendor.slug == "telekom":
+        return collect_static_candidates(pdf_dir, "Vertragsdetails*.pdf", "Telekom")
 
     return collect_default_candidates(pdf_dir, vendor)
 
@@ -632,7 +634,7 @@ def match_pdfs_to_transactions(vendor: VendorRule, records: list[TransactionReco
             matched_paths.append(candidate.path)
         return matched_paths
 
-    if vendor.slug == "dkb":
+    if vendor.slug in {"dkb", "telekom"}:
         return [candidates[0].path for _ in records]
 
     if vendor.slug == "google":

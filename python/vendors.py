@@ -55,6 +55,12 @@ VENDOR_RULES: dict[str, VendorRule] = {
         match_terms=("openai ireland limited",),
         leistungsinhalt="KI-Dienste / Sprachmodelle",
     ),
+    "telekom": VendorRule(
+        slug="telekom",
+        directory_name="Telekom",
+        match_terms=("telekom deutschland gmbh",),
+        leistungsinhalt="Telekommunikationsdienstleistungen",
+    ),
     "google": VendorRule(
         slug="google",
         directory_name="Google",
@@ -91,4 +97,3 @@ def list_expected_documents_export_dirs() -> tuple[str, ...]:
     vendor_dirs = [rule.directory_name for rule in list_vendor_rules()]
     vendor_dirs.append("PayPal")
     return tuple(vendor_dirs)
-
